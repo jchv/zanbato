@@ -17,23 +17,3 @@ func yamlMapForEach(node *yaml.Node, fn func(key *yaml.Node, value *yaml.Node) e
 	}
 	return nil
 }
-
-// Converts a yaml value to a yaml.Node, very inefficiently.
-func yamlValueToNode(v interface{}) (result *yaml.Node) {
-	if bytes, err := yaml.Marshal(v); err != nil {
-		panic(fmt.Errorf("marshalling yaml: %w", err))
-	} else {
-		result = &yaml.Node{}
-		if err := yaml.Unmarshal(bytes, result); err != nil {
-			panic(fmt.Errorf("unmarshalling yaml: %w", err))
-		}
-		return result
-	}
-}
-
-func yamlMapKeyNode(str string) (result *yaml.Node) {
-	return &yaml.Node{
-		Kind:  yaml.ScalarNode,
-		Value: str,
-	}
-}
