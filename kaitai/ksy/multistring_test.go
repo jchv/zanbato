@@ -20,9 +20,9 @@ func TestMultiString(t *testing.T) {
 
 	out, err := yaml.Marshal(TestStruct{Multi: MultiString{"scalar value"}})
 	assert.Nil(t, err)
-	assert.Equal(t, "multi:\n  - scalar value\n", string(out))
+	assert.Equal(t, "multi:\n    - scalar value\n", string(out))
 
 	out, err = yaml.Marshal(TestStruct{Multi: MultiString{"array", "value"}})
 	assert.Nil(t, err)
-	assert.Equal(t, "multi:\n  - array\n  - value\n", string(out))
+	assert.Equal(t, "multi:\n    - array\n    - value\n", string(out))
 }
