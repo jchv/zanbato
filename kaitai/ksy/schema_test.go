@@ -1,7 +1,7 @@
 package ksy
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1226,7 +1226,7 @@ func TestFullSchema(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.filename,
 			func(t *testing.T) {
-				contents, err := ioutil.ReadFile("testdata/" + test.filename)
+				contents, err := os.ReadFile("testdata/" + test.filename)
 				require.NoError(t, err)
 
 				actual := TypeSpec{}
@@ -1244,7 +1244,7 @@ func TestFullSchema(t *testing.T) {
 
 func BenchmarkFullSchemaUnmarshal(b *testing.B) {
 	b.StopTimer()
-	contents, err := ioutil.ReadFile("testdata/elf.ksy")
+	contents, err := os.ReadFile("testdata/elf.ksy")
 	require.Nil(b, err)
 	b.StartTimer()
 
@@ -1256,7 +1256,7 @@ func BenchmarkFullSchemaUnmarshal(b *testing.B) {
 
 func BenchmarkFullSchemaMarshal(b *testing.B) {
 	b.StopTimer()
-	contents, err := ioutil.ReadFile("testdata/elf.ksy")
+	contents, err := os.ReadFile("testdata/elf.ksy")
 	require.Nil(b, err)
 	actual := TypeSpec{}
 	require.Nil(b, yaml.Unmarshal(contents, &actual))
