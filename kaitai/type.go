@@ -91,6 +91,15 @@ func parseBasicDataType(typestr string) (Kind, bool) {
 	switch typestr {
 	case "u1":
 		return U1, true
+	case "u2":
+		// TODO: need to handle endianness
+		return U2le, true
+	case "u4":
+		// TODO: need to handle endianness
+		return U4le, true
+	case "u8":
+		// TODO: need to handle endianness
+		return U8le, true
 	case "u2le":
 		return U2le, true
 	case "u2be":
@@ -105,6 +114,15 @@ func parseBasicDataType(typestr string) (Kind, bool) {
 		return U8be, true
 	case "s1":
 		return S1, true
+	case "s2":
+		// TODO: need to handle endianness
+		return S2le, true
+	case "s4":
+		// TODO: need to handle endianness
+		return S4le, true
+	case "s8":
+		// TODO: need to handle endianness
+		return S8le, true
 	case "s2le":
 		return S2le, true
 	case "s2be":
