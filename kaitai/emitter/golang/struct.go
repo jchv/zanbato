@@ -211,9 +211,9 @@ func (e *Emitter) readattr(method *gomethod, a *kaitai.Attr) {
 func (e *Emitter) struc(unit *gounit, pfx string, s *kaitai.Struct) {
 	name := e.typename(s.ID)
 
-	if len(s.Attrs) > 0 {
+	if len(s.Seq) > 0 {
 		g := gostruct{name: pfx + name}
-		for _, attr := range s.Attrs {
+		for _, attr := range s.Seq {
 			g.fields = append(g.fields, govar{name: e.fieldname(attr.ID), typ: e.decltype(attr.Type, attr.Repeat)})
 		}
 		unit.structs = append(unit.structs, g)
@@ -226,7 +226,7 @@ func (e *Emitter) struc(unit *gounit, pfx string, s *kaitai.Struct) {
 			out:  []govar{{name: "err", typ: "error"}},
 			stmt: []gostatement{},
 		}
-		for _, attr := range s.Attrs {
+		for _, attr := range s.Seq {
 			e.readattr(&readmethod, attr)
 		}
 		unit.methods = append(unit.methods, readmethod)

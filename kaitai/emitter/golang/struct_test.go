@@ -68,7 +68,7 @@ const (
 			Name: "Attrs",
 			Struct: &kaitai.Struct{
 				ID: "attrs",
-				Attrs: []*kaitai.Attr{
+				Seq: []*kaitai.Attr{
 					{ID: "magic", Size: kaitai.MustParseExpr("4"), Contents: []byte{0x7f, 'E', 'L', 'F'}},
 					{ID: "count", Type: kaitai.Type{Kind: kaitai.S8le}},
 					// TODO: implement repeated fields.

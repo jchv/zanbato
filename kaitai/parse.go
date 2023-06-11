@@ -14,10 +14,10 @@ func ParseStruct(r io.Reader) (*Struct, error) {
 	if err := yaml.NewDecoder(r).Decode(&root); err != nil {
 		return nil, err
 	}
-	return translateTypeSpec("", root), nil
+	return translateTypeSpec("", root)
 }
 
-func translateTypeSpec(id Identifier, typ ksy.TypeSpec) *Struct {
+func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 	result := &Struct{}
 	result.Doc = typ.Doc
 	if id == "" {
@@ -25,46 +25,82 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) *Struct {
 	} else {
 		result.ID = id
 	}
+	for _, spec := range typ.Params {
+		param, err := translateParamSpec(spec)
+		if err != nil {
+			return nil, err
+		}
+		result.Params = append(result.Params, param)
+	}
 	for _, spec := range typ.Seq {
-		result.Attrs = append(result.Attrs, translateAttrSpec(spec))
+		attr, err := translateAttrSpec(spec)
+		if err != nil {
+			return nil, err
+		}
+		result.Seq = append(result.Seq, attr)
 	}
 	for _, spec := range typ.Types {
-		result.Structs = append(result.Structs, translateTypeSpec(Identifier(spec.Meta.ID), spec))
+		typ, err := translateTypeSpec(Identifier(spec.Meta.ID), spec)
+		if err != nil {
+			return nil, err
+		}
+		result.Structs = append(result.Structs, typ)
 	}
 	for _, spec := range typ.Enums {
-		result.Enums = append(result.Enums, translateEnumSpec(Identifier(spec.ID), spec))
+		enum, err := translateEnumSpec(Identifier(spec.ID), spec)
+		if err != nil {
+			return nil, err
+		}
+		result.Enums = append(result.Enums, enum)
 	}
-	return result
+	return result, nil
 }
 
-func translateAttrSpec(typ ksy.AttributeSpec) *Attr {
+func translateParamSpec(param ksy.ParamSpec) (*Param, error) {
+	typ, err := ParseType(param.Type)
+	if err != nil {
+		return nil, err
+	}
+	return &Param{
+		ID:   Identifier(param.ID),
+		Doc:  param.Doc,
+		Type: typ,
+		Enum: param.Enum,
+	}, nil
+}
+
+func translateAttrSpec(attr ksy.AttributeSpec) (*Attr, error) {
+	typ, err := ParseType(attr.Type.Value)
+	if err != nil {
+		return nil, err
+	}
 	return &Attr{
-		ID:         Identifier(typ.ID),
-		Doc:        typ.Doc,
-		Contents:   typ.Contents,
-		Type:       ParseType(typ.Type.Value),
-		Repeat:     ParseRepeat(typ),
-		If:         MustParseExpr(typ.If),
-		Size:       MustParseExpr(typ.Size),
-		SizeEos:    typ.SizeEos,
-		Process:    MustParseExpr(typ.Process),
-		Enum:       typ.Enum,
-		Encoding:   typ.Encoding,
-		Terminator: typ.Terminator,
-		Consume:    typ.Consume,
-		Include:    typ.Include,
-		EosError:   typ.EosError,
-		Pos:        MustParseExpr(typ.Pos),
-		IO:         MustParseExpr(typ.IO),
-		Value:      MustParseExpr(typ.Value),
-	}
+		ID:         Identifier(attr.ID),
+		Doc:        attr.Doc,
+		Contents:   attr.Contents,
+		Type:       typ,
+		Repeat:     ParseRepeat(attr),
+		If:         MustParseExpr(attr.If),
+		Size:       MustParseExpr(attr.Size),
+		SizeEos:    attr.SizeEos,
+		Process:    MustParseExpr(attr.Process),
+		Enum:       attr.Enum,
+		Encoding:   attr.Encoding,
+		Terminator: attr.Terminator,
+		Consume:    attr.Consume,
+		Include:    attr.Include,
+		EosError:   attr.EosError,
+		Pos:        MustParseExpr(attr.Pos),
+		IO:         MustParseExpr(attr.IO),
+		Value:      MustParseExpr(attr.Value),
+	}, nil
 }
 
-func translateEnumSpec(id Identifier, typ ksy.EnumSpec) *Enum {
+func translateEnumSpec(id Identifier, typ ksy.EnumSpec) (*Enum, error) {
 	result := &Enum{}
 	result.ID = id
 	for _, val := range typ.Values {
 		result.Values = append(result.Values, EnumValue{val.Value, Identifier(val.ID)})
 	}
-	return result
+	return result, nil
 }

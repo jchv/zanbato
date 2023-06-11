@@ -7,6 +7,7 @@ type ParamSpec struct {
 	Type   string     `yaml:"type,omitempty"`
 	Doc    string     `yaml:"doc,omitempty"`
 	DocRef string     `yaml:"doc-ref,omitempty"`
+	Enum   string     `yaml:"enum,omitempty"`
 }
 
 // ParamsSpec represents the parameter list.

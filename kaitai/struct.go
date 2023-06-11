@@ -5,6 +5,7 @@ type Param struct {
 	Doc  string
 	ID   Identifier
 	Type Type
+	Enum string
 }
 
 // Struct contains a Kaitai struct.
@@ -12,7 +13,7 @@ type Struct struct {
 	Doc     string
 	ID      Identifier
 	Params  []*Param
-	Attrs   []*Attr
+	Seq     []*Attr
 	Structs []*Struct
 	Enums   []*Enum
 }

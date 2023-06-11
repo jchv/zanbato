@@ -46,7 +46,7 @@ func TestParse(t *testing.T) {
 			Source: `{meta: {id: attrs}, seq: [{id: magic, size: 4, contents: [0x7f, "ELF"]}]}`,
 			Struct: &Struct{
 				ID: "attrs",
-				Attrs: []*Attr{
+				Seq: []*Attr{
 					{ID: "magic", Size: &Expr{IntNode{*big.NewInt(4)}}, Contents: []byte{0x7f, 'E', 'L', 'F'}},
 				},
 			},
