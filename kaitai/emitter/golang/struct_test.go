@@ -69,7 +69,7 @@ const (
 			Struct: &kaitai.Struct{
 				ID: "attrs",
 				Seq: []*kaitai.Attr{
-					{ID: "magic", Size: kaitai.MustParseExpr("4"), Contents: []byte{0x7f, 'E', 'L', 'F'}},
+					{ID: "magic", Type: kaitai.Type{Kind: kaitai.Bytes, Bytes: &kaitai.BytesType{Size: kaitai.MustParseExpr("4")}}, Contents: []byte{0x7f, 'E', 'L', 'F'}},
 					{ID: "count", Type: kaitai.Type{Kind: kaitai.S8le}},
 					// TODO: implement repeated fields.
 					// {ID: "entries", Type: kaitai.Type{Kind: kaitai.S2le}, Repeat: kaitai.RepeatExpr{CountExpr: kaitai.MustParseExpr("count")}},
@@ -80,25 +80,29 @@ const (
 package test
 
 import (
+	bytes "bytes"
 	kaitai "github.com/kaitai-io/kaitai_struct_go_runtime/kaitai"
 )
 
 type Attrs struct {
-	magic uint8
-	count int64
+	Magic []byte
+	Count int64
 }
 
 func (this *Attrs) Read(io *kaitai.Stream) (err error) {
-	tmp1, err := io.ReadU1()
+	tmp1, err := io.ReadBytes(4)
 	if err != nil {
 		return err
 	}
-	this.magic = tmp1
+	this.Magic = (tmp1)
+	if !bytes.Equal(tmp1, []byte{0x7f, 0x45, 0x4c, 0x46}) {
+		return io.NewValidationNotEqualError([]byte{0x7f, 0x45, 0x4c, 0x46}, tmp1, io, "") // TODO: set srcPath
+	}
 	tmp2, err := io.ReadS8le()
 	if err != nil {
 		return err
 	}
-	this.count = tmp2
+	this.Count = (tmp2)
 }
 
 `,

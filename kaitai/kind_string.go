@@ -9,32 +9,40 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[U1-1]
-	_ = x[U2le-2]
-	_ = x[U2be-3]
-	_ = x[U4le-4]
-	_ = x[U4be-5]
-	_ = x[U8le-6]
-	_ = x[U8be-7]
-	_ = x[S1-8]
-	_ = x[S2le-9]
-	_ = x[S2be-10]
-	_ = x[S4le-11]
-	_ = x[S4be-12]
-	_ = x[S8le-13]
-	_ = x[S8be-14]
-	_ = x[Bits-15]
-	_ = x[F4le-16]
-	_ = x[F4be-17]
-	_ = x[F8le-18]
-	_ = x[F8be-19]
-	_ = x[Bytes-20]
-	_ = x[String-21]
-	_ = x[User-22]
+	_ = x[U2-2]
+	_ = x[U2le-3]
+	_ = x[U2be-4]
+	_ = x[U4-5]
+	_ = x[U4le-6]
+	_ = x[U4be-7]
+	_ = x[U8-8]
+	_ = x[U8le-9]
+	_ = x[U8be-10]
+	_ = x[S1-11]
+	_ = x[S2-12]
+	_ = x[S2le-13]
+	_ = x[S2be-14]
+	_ = x[S4-15]
+	_ = x[S4le-16]
+	_ = x[S4be-17]
+	_ = x[S8-18]
+	_ = x[S8le-19]
+	_ = x[S8be-20]
+	_ = x[Bits-21]
+	_ = x[F4-22]
+	_ = x[F4le-23]
+	_ = x[F4be-24]
+	_ = x[F8-25]
+	_ = x[F8le-26]
+	_ = x[F8be-27]
+	_ = x[Bytes-28]
+	_ = x[String-29]
+	_ = x[User-30]
 }
 
-const _Kind_name = "U1U2leU2beU4leU4beU8leU8beS1S2leS2beS4leS4beS8leS8beBitsF4leF4beF8leF8beBytesStringUser"
+const _Kind_name = "U1U2U2leU2beU4U4leU4beU8U8leU8beS1S2S2leS2beS4S4leS4beS8S8leS8beBitsF4F4leF4beF8F8leF8beBytesStringUser"
 
-var _Kind_index = [...]uint8{0, 2, 6, 10, 14, 18, 22, 26, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 77, 83, 87}
+var _Kind_index = [...]uint8{0, 2, 4, 8, 12, 14, 18, 22, 24, 28, 32, 34, 36, 40, 44, 46, 50, 54, 56, 60, 64, 68, 70, 74, 78, 80, 84, 88, 93, 99, 103}
 
 func (i Kind) String() string {
 	i -= 1

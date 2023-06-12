@@ -21,11 +21,12 @@ const (
 // Emitter emits Go code for kaitai structs.
 type Emitter struct {
 	pkgname string
+	endian  kaitai.Endianness
 }
 
 // NewEmitter constructs a new emitter with the given parameters.
 func NewEmitter(pkgname string) *Emitter {
-	return &Emitter{pkgname}
+	return &Emitter{pkgname: pkgname}
 }
 
 // Emit emits Go code for the given kaitai struct.
@@ -42,7 +43,7 @@ func (e *Emitter) typename(n kaitai.Identifier) string {
 }
 
 func (e *Emitter) fieldname(n kaitai.Identifier) string {
-	return strings.ToLower(string(n))
+	return strings.ReplaceAll(strings.Title(strings.ReplaceAll(string(n), "_", " ")), " ", "")
 }
 
 func (e *Emitter) setimport(unit *gounit, pkg string, as string) {
@@ -56,41 +57,25 @@ func (e *Emitter) decltype(n kaitai.Type, r kaitai.RepeatType) string {
 	switch n.Kind {
 	case kaitai.U1:
 		return "uint8"
-	case kaitai.U2le:
+	case kaitai.U2, kaitai.U2le, kaitai.U2be:
 		return "uint16"
-	case kaitai.U2be:
-		return "uint16"
-	case kaitai.U4le:
+	case kaitai.U4, kaitai.U4le, kaitai.U4be:
 		return "uint32"
-	case kaitai.U4be:
-		return "uint32"
-	case kaitai.U8le:
-		return "uint64"
-	case kaitai.U8be:
+	case kaitai.U8, kaitai.U8le, kaitai.U8be:
 		return "uint64"
 	case kaitai.S1:
 		return "int8"
-	case kaitai.S2le:
+	case kaitai.S2, kaitai.S2le, kaitai.S2be:
 		return "int16"
-	case kaitai.S2be:
-		return "int16"
-	case kaitai.S4le:
+	case kaitai.S4, kaitai.S4le, kaitai.S4be:
 		return "int32"
-	case kaitai.S4be:
-		return "int32"
-	case kaitai.S8le:
-		return "int64"
-	case kaitai.S8be:
+	case kaitai.S8, kaitai.S8le, kaitai.S8be:
 		return "int64"
 	case kaitai.Bits:
 		return "uint64"
-	case kaitai.F4le:
+	case kaitai.F4, kaitai.F4le, kaitai.F4be:
 		return "float32"
-	case kaitai.F4be:
-		return "float32"
-	case kaitai.F8le:
-		return "float64"
-	case kaitai.F8be:
+	case kaitai.F8, kaitai.F8le, kaitai.F8be:
 		return "float64"
 	case kaitai.Bytes:
 		return "[]byte"
@@ -99,60 +84,110 @@ func (e *Emitter) decltype(n kaitai.Type, r kaitai.RepeatType) string {
 	case kaitai.User:
 		return "interface{}"
 	}
-	panic("unexpected typekind")
+	panic("unexpected typekind: " + n.Kind.String())
 }
 
-func (e *Emitter) readfunc(n kaitai.Type) string {
+func (e *Emitter) readcall(n kaitai.Type) string {
 	switch n.Kind {
+	case kaitai.U2, kaitai.U4, kaitai.U8,
+		kaitai.S2, kaitai.S4, kaitai.S8,
+		kaitai.F4, kaitai.F8:
+		panic("undecided endianness")
 	case kaitai.U1:
-		return "ReadU1"
+		return "ReadU1()"
 	case kaitai.U2le:
-		return "ReadU2le"
+		return "ReadU2le()"
 	case kaitai.U2be:
-		return "ReadU2be"
+		return "ReadU2be()"
 	case kaitai.U4le:
-		return "ReadU4le"
+		return "ReadU4le()"
 	case kaitai.U4be:
-		return "ReadU4be"
+		return "ReadU4be()"
 	case kaitai.U8le:
-		return "ReadU8le"
+		return "ReadU8le()"
 	case kaitai.U8be:
-		return "ReadU8be"
+		return "ReadU8be()"
 	case kaitai.S1:
-		return "ReadS1"
+		return "ReadS1()"
 	case kaitai.S2le:
-		return "ReadS2le"
+		return "ReadS2le()"
 	case kaitai.S2be:
-		return "ReadS2be"
+		return "ReadS2be()"
 	case kaitai.S4le:
-		return "ReadS4le"
+		return "ReadS4le()"
 	case kaitai.S4be:
-		return "ReadS4be"
+		return "ReadS4be()"
 	case kaitai.S8le:
-		return "ReadS8le"
+		return "ReadS8le()"
 	case kaitai.S8be:
-		return "ReadS8be"
+		return "ReadS8be()"
 	case kaitai.Bits:
-		panic("not implemented yet")
+		panic("not implemented yet: bits")
 	case kaitai.F4le:
-		return "ReadF4le"
+		return "ReadF4le()"
 	case kaitai.F4be:
-		return "ReadF4be"
+		return "ReadF4be()"
 	case kaitai.F8le:
-		return "ReadF8le"
+		return "ReadF8le()"
 	case kaitai.F8be:
-		return "ReadF8be"
+		return "ReadF8be()"
 	case kaitai.Bytes:
-		panic("not implemented yet")
+		if n.Bytes.Size != nil {
+			exprStr, err := e.expr(n.Bytes.Size)
+			if err != nil {
+				panic(err)
+			}
+			return fmt.Sprintf("ReadBytes(%s)", exprStr)
+		}
+		panic("not implemented yet: bytes")
 	case kaitai.String:
-		panic("not implemented yet")
+		if n.String.SizeEOS {
+			return fmt.Sprintf("ReadStrEOS(%q)", n.String.Encoding)
+		}
+		if n.String.Size != nil {
+			sizeStr, err := e.expr(n.String.Size)
+			if err != nil {
+				panic(err)
+			}
+			if n.String.Terminator == -1 {
+				return fmt.Sprintf("ReadBytes(%s)", sizeStr)
+			} else {
+				return fmt.Sprintf("ReadBytesPadTerm(%s, %q, %q, %v)", sizeStr, n.String.Terminator, n.String.Terminator, n.String.Include)
+			}
+		} else {
+			if n.String.Terminator == -1 {
+				panic("undecidable condition")
+			}
+			return fmt.Sprintf("ReadBytesPadTerm(%q, %v, %v, %v)", rune(n.String.Terminator), n.String.Include, n.String.Consume, n.String.EosError)
+		}
 	case kaitai.User:
-		panic("not implemented yet")
+		panic("not implemented yet: usertype")
 	}
-	panic("unexpected typekind")
+	panic("unexpected typekind: " + n.Kind.String())
+}
+
+func (e *Emitter) expr(expr *kaitai.Expr) (string, error) {
+	return e.exprNode(expr.Root)
+}
+
+func (e *Emitter) exprNode(node kaitai.Node) (string, error) {
+	switch t := node.(type) {
+	case kaitai.IdentNode:
+		// TODO: not really
+		return "this." + e.fieldname(kaitai.Identifier(t.Value)), nil
+	case kaitai.IntNode:
+		return t.Value.String(), nil
+	default:
+		return "", fmt.Errorf("unsupported expression node %T", t)
+	}
 }
 
 func (e *Emitter) root(s *kaitai.Struct) emitter.Artifact {
+	if s.Meta.Endian != kaitai.UnspecifiedOrder {
+		// TODO: endian switching
+		e.endian = s.Meta.Endian
+	}
+
 	unit := gounit{pkgname: e.pkgname, imports: map[string]string{}}
 	e.struc(&unit, "", s)
 
@@ -174,10 +209,27 @@ func (e *Emitter) enum(unit *gounit, pfx string, k *kaitai.Enum) {
 	unit.enums = append(unit.enums, g)
 }
 
-func (e *Emitter) readattr(method *gomethod, a *kaitai.Attr) {
+func (e *Emitter) readattr(unit *gounit, method *gomethod, a *kaitai.Attr) bool {
 	method.tmp++
-	readcall := fmt.Sprintf(`io.%s()`, e.readfunc(a.Type))
+	typ := a.Type.FoldEndian(e.endian)
+
+	switch typ.Kind {
+	case kaitai.U2, kaitai.U4, kaitai.U8,
+		kaitai.S2, kaitai.S4, kaitai.S8,
+		kaitai.F4, kaitai.F8:
+		method.stmt = append(method.stmt, gostatement{
+			source: "return io.UndecidedEndiannessError",
+		})
+		return false
+	}
+
+	readcall := fmt.Sprintf(`io.%s`, e.readcall(typ))
 	fieldname := e.fieldname(a.ID)
+
+	cast := ""
+	if a.Type.Kind == kaitai.String {
+		cast = "string"
+	}
 
 	switch a.Repeat.(type) {
 	case kaitai.RepeatEOS:
@@ -191,21 +243,30 @@ func (e *Emitter) readattr(method *gomethod, a *kaitai.Attr) {
 		if err != nil {
 			return err
 		}
-		this.%s = append(this.%s, tmp%d)
+		this.%s = append(this.%s, %s(tmp%d))
 	}
-`, method.tmp, e.readfunc(a.Type), fieldname, fieldname, method.tmp)})
+`, method.tmp, readcall, fieldname, fieldname, cast, method.tmp)})
 	case kaitai.RepeatExpr:
-		panic("not implemented")
+		panic("not implemented: repeat expr")
 	case kaitai.RepeatUntil:
-		panic("not implemented")
+		panic("not implemented: repeat until")
 	case nil:
 		method.stmt = append(method.stmt, gostatement{source: fmt.Sprintf(`tmp%d, err := %s
 	if err != nil {
 		return err
 	}
-	this.%s = tmp%d
-`, method.tmp, readcall, fieldname, method.tmp)})
+	this.%s = %s(tmp%d)
+`, method.tmp, readcall, fieldname, cast, method.tmp)})
 	}
+
+	if a.Contents != nil {
+		e.setimport(unit, "bytes", "bytes")
+		method.stmt = append(method.stmt, gostatement{source: fmt.Sprintf(`if !bytes.Equal(tmp%d, %#v) {
+		return io.NewValidationNotEqualError(%#v, tmp%d, io, "") // TODO: set srcPath
+	}
+`, method.tmp, a.Contents, a.Contents, method.tmp)})
+	}
+	return true
 }
 
 func (e *Emitter) struc(unit *gounit, pfx string, s *kaitai.Struct) {
@@ -227,7 +288,10 @@ func (e *Emitter) struc(unit *gounit, pfx string, s *kaitai.Struct) {
 			stmt: []gostatement{},
 		}
 		for _, attr := range s.Seq {
-			e.readattr(&readmethod, attr)
+			if !e.readattr(unit, &readmethod, attr) {
+				// We may need to end the function early in some cases.
+				break
+			}
 		}
 		unit.methods = append(unit.methods, readmethod)
 	}

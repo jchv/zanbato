@@ -17,10 +17,10 @@ type AttributeSpec struct {
 	Process     string       `yaml:"process,omitempty"`
 	Enum        string       `yaml:"enum,omitempty"`
 	Encoding    string       `yaml:"encoding,omitempty"`
-	Terminator  int          `yaml:"terminator,omitempty"`
-	Consume     bool         `yaml:"consume,omitempty"`
-	Include     bool         `yaml:"include,omitempty"`
-	EosError    bool         `yaml:"eos-error,omitempty"`
+	Terminator  *int         `yaml:"terminator,omitempty"`
+	Consume     *bool        `yaml:"consume,omitempty"`
+	Include     *bool        `yaml:"include,omitempty"`
+	EosError    *bool        `yaml:"eos-error,omitempty"`
 	Pos         string       `yaml:"pos,omitempty"`
 	IO          string       `yaml:"io,omitempty"`
 	Value       string       `yaml:"value,omitempty"`

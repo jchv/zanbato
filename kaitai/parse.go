@@ -1,6 +1,7 @@
 package kaitai
 
 import (
+	"errors"
 	"io"
 
 	"github.com/jchv/zanbato/kaitai/ksy"
@@ -25,6 +26,15 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 	} else {
 		result.ID = id
 	}
+
+	if typ.Meta.Endian.Value == "le" {
+		result.Meta.Endian = LittleEndian
+	} else if typ.Meta.Endian.Value == "be" {
+		result.Meta.Endian = BigEndian
+	} else if len(typ.Meta.Endian.Cases) > 0 || typ.Meta.Endian.SwitchOn != "" {
+		return nil, errors.New("endian switching not supported")
+	}
+
 	for _, spec := range typ.Params {
 		param, err := translateParamSpec(spec)
 		if err != nil {
@@ -57,7 +67,7 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 }
 
 func translateParamSpec(param ksy.ParamSpec) (*Param, error) {
-	typ, err := ParseType(param.Type)
+	typ, err := ParseBasicType(param.Type)
 	if err != nil {
 		return nil, err
 	}
@@ -70,29 +80,22 @@ func translateParamSpec(param ksy.ParamSpec) (*Param, error) {
 }
 
 func translateAttrSpec(attr ksy.AttributeSpec) (*Attr, error) {
-	typ, err := ParseType(attr.Type.Value)
+	typ, err := ParseAttrType(attr)
 	if err != nil {
 		return nil, err
 	}
 	return &Attr{
-		ID:         Identifier(attr.ID),
-		Doc:        attr.Doc,
-		Contents:   attr.Contents,
-		Type:       typ,
-		Repeat:     ParseRepeat(attr),
-		If:         MustParseExpr(attr.If),
-		Size:       MustParseExpr(attr.Size),
-		SizeEos:    attr.SizeEos,
-		Process:    MustParseExpr(attr.Process),
-		Enum:       attr.Enum,
-		Encoding:   attr.Encoding,
-		Terminator: attr.Terminator,
-		Consume:    attr.Consume,
-		Include:    attr.Include,
-		EosError:   attr.EosError,
-		Pos:        MustParseExpr(attr.Pos),
-		IO:         MustParseExpr(attr.IO),
-		Value:      MustParseExpr(attr.Value),
+		ID:       Identifier(attr.ID),
+		Doc:      attr.Doc,
+		Contents: attr.Contents,
+		Type:     typ,
+		Repeat:   ParseRepeat(attr),
+		Process:  MustParseExpr(attr.Process),
+		If:       MustParseExpr(attr.If),
+		Enum:     attr.Enum,
+		Pos:      MustParseExpr(attr.Pos),
+		IO:       MustParseExpr(attr.IO),
+		Value:    MustParseExpr(attr.Value),
 	}, nil
 }
 
