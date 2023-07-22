@@ -6,7 +6,7 @@ package kaitai
 type Param struct {
 	Doc  string
 	ID   Identifier
-	Type Type
+	Type TypeRef
 	Enum string
 }
 
@@ -21,7 +21,8 @@ const (
 
 // Meta contains the relevant metadata information.
 type Meta struct {
-	Endian Endianness
+	Endian  Endianness
+	Imports []string
 }
 
 // Struct contains a Kaitai struct.

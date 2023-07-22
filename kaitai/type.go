@@ -1,7 +1,10 @@
 package kaitai
 
 import (
+	"errors"
 	"fmt"
+	"math/big"
+	"strings"
 
 	"github.com/jchv/zanbato/kaitai/ksy"
 )
@@ -43,6 +46,7 @@ const (
 	Bytes
 	String
 	User
+	UntypedNum
 )
 
 // BytesType contains data for bytes types.
@@ -68,19 +72,31 @@ type StringType struct {
 
 // UserType contains data for user types.
 type UserType struct {
-	Name string
+	Name   string
+	Params []*Expr
 }
 
-// Type contains data for a type specification.
-type Type struct {
-	Kind Kind
+// TypeSwitch contains a set of possible types.
+type TypeSwitch struct {
+	FieldName Identifier // Name of the field; this is for identity purposes.
+	SwitchOn  *Expr
+	Cases     map[string]TypeRef
+}
 
+type TypeRef struct {
+	Kind   Kind
 	Bytes  *BytesType
 	String *StringType
 	User   *UserType
 }
 
-func (t Type) FoldEndian(endian Endianness) Type {
+// Type contains data for a type specification.
+type Type struct {
+	TypeRef    *TypeRef
+	TypeSwitch *TypeSwitch
+}
+
+func (t TypeRef) FoldEndian(endian Endianness) TypeRef {
 	switch endian {
 	case LittleEndian:
 		switch t.Kind {
@@ -124,106 +140,192 @@ func (t Type) FoldEndian(endian Endianness) Type {
 	return t
 }
 
+func (t TypeSwitch) FoldEndian(endian Endianness) TypeSwitch {
+	cases := make(map[string]TypeRef)
+	for key, value := range t.Cases {
+		cases[key] = value.FoldEndian(endian)
+	}
+	t.Cases = cases
+	return t
+}
+
+func (t Type) FoldEndian(endian Endianness) Type {
+	typeRef := t.TypeRef
+	if typeRef != nil {
+		newTypeRef := typeRef.FoldEndian(endian)
+		typeRef = &newTypeRef
+	}
+	typeSwitch := t.TypeSwitch
+	if typeSwitch != nil {
+		newTypeSwitch := typeSwitch.FoldEndian(endian)
+		typeSwitch = &newTypeSwitch
+	}
+	return Type{
+		TypeRef:    typeRef,
+		TypeSwitch: typeSwitch,
+	}
+}
+
 // Identifier is used to distinguish Kaitai identifiers.
 type Identifier string
 
 // ParseAttrType parses a type from an attr.
 func ParseAttrType(attr ksy.AttributeSpec) (Type, error) {
-	typName := attr.Type.Value
-	if attr.Type.Value == "" {
-		typName = "bytes"
+	if attr.Type.Value != "" && attr.Type.SwitchOn != "" {
+		return Type{}, errors.New("attr specifies both typeref and switch type")
 	}
 
-	typ, err := ParseBasicType(typName)
-	if err != nil {
-		return Type{}, err
-	}
+	if attr.Type.SwitchOn != "" {
+		switchOn, err := ParseExpr(attr.Type.SwitchOn)
+		if err != nil {
+			return Type{}, fmt.Errorf("parsing attr switch-on statement: %w", err)
+		}
 
-	if attr.Size != "" {
-		sizeExpr, err := ParseExpr(attr.Size)
+		cases := make(map[string]TypeRef)
+		for key, value := range attr.Type.Cases {
+			cases[key], err = ParseTypeRef(value)
+			if err != nil {
+				return Type{}, fmt.Errorf("parsing case %q type: %w", key, err)
+			}
+		}
+
+		return Type{TypeSwitch: &TypeSwitch{
+			FieldName: Identifier(attr.ID),
+			SwitchOn:  switchOn,
+			Cases:     cases,
+		}}, nil
+	} else {
+		// Default to bytes if not specified.
+		typName := attr.Type.Value
+		if typName == "" {
+			typName = "bytes"
+		}
+
+		typ, err := ParseTypeRef(typName)
 		if err != nil {
 			return Type{}, err
 		}
-		switch typ.Kind {
-		case Bytes:
-			typ.Bytes.Size = sizeExpr
-		case String:
-			typ.String.Size = sizeExpr
-		default:
-			return Type{}, fmt.Errorf("size on type %s not supported", typ.Kind)
-		}
-	}
 
-	if attr.SizeEos {
-		switch typ.Kind {
-		case Bytes:
-			typ.Bytes.SizeEOS = attr.SizeEos
-		case String:
-			typ.String.SizeEOS = attr.SizeEos
-		default:
-			return Type{}, fmt.Errorf("size-eos on type %s not supported", typ.Kind)
+		if attr.Size != "" {
+			sizeExpr, err := ParseExpr(attr.Size)
+			if err != nil {
+				return Type{}, err
+			}
+			switch typ.Kind {
+			case Bytes:
+				typ.Bytes.Size = sizeExpr
+			case String:
+				typ.String.Size = sizeExpr
+			default:
+				return Type{}, fmt.Errorf("size on type %s not supported", typ.Kind)
+			}
 		}
-	}
 
-	if attr.Encoding != "" {
-		switch typ.Kind {
-		case String:
-			typ.String.Encoding = attr.Encoding
-		default:
-			return Type{}, fmt.Errorf("encoding on type %s not supported", typ.Kind)
+		if attr.Contents != nil {
+			switch typ.Kind {
+			case Bytes:
+				typ.Bytes.Size = &Expr{Root: IntNode{Value: *big.NewInt(int64(len(attr.Contents)))}}
+			case String:
+				typ.String.Size = &Expr{Root: IntNode{Value: *big.NewInt(int64(len(attr.Contents)))}}
+			default:
+				return Type{}, fmt.Errorf("contents on type %s not supported", typ.Kind)
+			}
 		}
-	}
 
-	if attr.Terminator != nil {
-		switch typ.Kind {
-		case Bytes:
-			typ.Bytes.Terminator = *attr.Terminator
-		case String:
-			typ.String.Terminator = *attr.Terminator
-		default:
-			return Type{}, fmt.Errorf("terminator on type %s not supported", typ.Kind)
+		if attr.SizeEos {
+			switch typ.Kind {
+			case Bytes:
+				typ.Bytes.SizeEOS = attr.SizeEos
+			case String:
+				typ.String.SizeEOS = attr.SizeEos
+			default:
+				return Type{}, fmt.Errorf("size-eos on type %s not supported", typ.Kind)
+			}
 		}
-	}
 
-	if attr.Consume != nil {
-		switch typ.Kind {
-		case Bytes:
-			typ.Bytes.Consume = *attr.Consume
-		case String:
-			typ.String.Consume = *attr.Consume
-		default:
-			return Type{}, fmt.Errorf("consume on type %s not supported", typ.Kind)
+		if attr.Encoding != "" {
+			switch typ.Kind {
+			case String:
+				typ.String.Encoding = attr.Encoding
+			default:
+				return Type{}, fmt.Errorf("encoding on type %s not supported", typ.Kind)
+			}
 		}
-	}
 
-	if attr.Include != nil {
-		switch typ.Kind {
-		case Bytes:
-			typ.Bytes.Include = *attr.Include
-		case String:
-			typ.String.Include = *attr.Include
-		default:
-			return Type{}, fmt.Errorf("include on type %s not supported", typ.Kind)
+		if attr.Terminator != nil {
+			switch typ.Kind {
+			case Bytes:
+				typ.Bytes.Terminator = *attr.Terminator
+			case String:
+				typ.String.Terminator = *attr.Terminator
+			default:
+				return Type{}, fmt.Errorf("terminator on type %s not supported", typ.Kind)
+			}
 		}
-	}
 
-	if attr.EosError != nil {
-		switch typ.Kind {
-		case Bytes:
-			typ.Bytes.EosError = *attr.EosError
-		case String:
-			typ.String.EosError = *attr.EosError
-		default:
-			return Type{}, fmt.Errorf("eos-error on type %s not supported", typ.Kind)
+		if attr.Consume != nil {
+			switch typ.Kind {
+			case Bytes:
+				typ.Bytes.Consume = *attr.Consume
+			case String:
+				typ.String.Consume = *attr.Consume
+			default:
+				return Type{}, fmt.Errorf("consume on type %s not supported", typ.Kind)
+			}
 		}
-	}
 
-	return typ, nil
+		if attr.Include != nil {
+			switch typ.Kind {
+			case Bytes:
+				typ.Bytes.Include = *attr.Include
+			case String:
+				typ.String.Include = *attr.Include
+			default:
+				return Type{}, fmt.Errorf("include on type %s not supported", typ.Kind)
+			}
+		}
+
+		if attr.EosError != nil {
+			switch typ.Kind {
+			case Bytes:
+				typ.Bytes.EosError = *attr.EosError
+			case String:
+				typ.String.EosError = *attr.EosError
+			default:
+				return Type{}, fmt.Errorf("eos-error on type %s not supported", typ.Kind)
+			}
+		}
+
+		return Type{TypeRef: &typ}, nil
+	}
 }
 
-// ParseBasicType parses a type from a type string.
-func ParseBasicType(typestr string) (Type, error) {
-	result := Type{}
+// parseUserType parses a user type string.
+func parseUserType(typestr string) (TypeRef, error) {
+	result := UserType{}
+	result.Name = typestr
+	// This is kind of stinky, should probably lex this properly.
+	if i := strings.IndexByte(typestr, '('); i >= 0 {
+		j := strings.LastIndexByte(typestr, ')')
+		if j < 0 {
+			return TypeRef{}, errors.New("missing ) in type params")
+		}
+		result.Name = typestr[:i]
+		params := strings.Split(typestr[i+1:j], ",")
+		for i, src := range params {
+			param, err := ParseExpr(src)
+			if err != nil {
+				return TypeRef{}, fmt.Errorf("in parameter %d of %s: %w", i+1, result.Name, err)
+			}
+			result.Params = append(result.Params, param)
+		}
+	}
+	return TypeRef{Kind: User, User: &result}, nil
+}
+
+// ParseTypeRef parses a type from a type string.
+func ParseTypeRef(typestr string) (TypeRef, error) {
+	result := TypeRef{}
 	if kind, ok := parseBasicDataType(typestr); ok {
 		result.Kind = kind
 		switch kind {
@@ -242,13 +344,9 @@ func ParseBasicType(typestr string) (Type, error) {
 				result.String.Terminator = 0
 			}
 		}
-	} else {
-		result.Kind = User
-		result.User = &UserType{
-			Name: typestr,
-		}
+		return result, nil
 	}
-	return result, nil
+	return parseUserType(typestr)
 }
 
 func parseBasicDataType(typestr string) (Kind, bool) {

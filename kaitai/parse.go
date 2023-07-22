@@ -27,6 +27,8 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 		result.ID = id
 	}
 
+	result.Meta.Imports = typ.Meta.Imports
+
 	if typ.Meta.Endian.Value == "le" {
 		result.Meta.Endian = LittleEndian
 	} else if typ.Meta.Endian.Value == "be" {
@@ -67,7 +69,7 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 }
 
 func translateParamSpec(param ksy.ParamSpec) (*Param, error) {
-	typ, err := ParseBasicType(param.Type)
+	typ, err := ParseTypeRef(param.Type)
 	if err != nil {
 		return nil, err
 	}

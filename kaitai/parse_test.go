@@ -47,7 +47,7 @@ func TestParse(t *testing.T) {
 			Struct: &Struct{
 				ID: "attrs",
 				Seq: []*Attr{
-					{ID: "magic", Type: Type{Kind: Bytes, Bytes: &BytesType{Consume: true, EosError: true, Size: &Expr{IntNode{*big.NewInt(4)}}}}, Contents: []byte{0x7f, 'E', 'L', 'F'}},
+					{ID: "magic", Type: Type{TypeRef: &TypeRef{Kind: Bytes, Bytes: &BytesType{Consume: true, EosError: true, Size: &Expr{IntNode{*big.NewInt(4)}}}}}, Contents: []byte{0x7f, 'E', 'L', 'F'}},
 				},
 			},
 		},

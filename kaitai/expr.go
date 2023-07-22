@@ -16,24 +16,70 @@ type Expr struct {
 }
 
 // Node is a node in the AST.
-type Node interface{ isnode() }
+type Node interface {
+	isnode()
+	Type(ref *Struct) (Type, bool)
+}
 
 // IdentNode is an identifier.
 type IdentNode struct{ Value string }
 
+func (IdentNode) isnode() {}
+
+func (i IdentNode) Type(ref *Struct) (Type, bool) {
+	for _, param := range ref.Params {
+		if param.ID == Identifier(i.Value) {
+			typeref := param.Type
+			return Type{TypeRef: &typeref}, true
+		}
+	}
+	for _, attr := range ref.Seq {
+		if attr.ID == Identifier(i.Value) {
+			return attr.Type, true
+		}
+	}
+	return Type{}, false
+}
+
 // StrNode is a string literal.
 type StrNode struct{ Value string }
+
+func (StrNode) isnode() {}
+
+func (StrNode) Type(ref *Struct) (Type, bool) {
+	return Type{
+		TypeRef: &TypeRef{
+			Kind:   String,
+			String: &StringType{},
+		},
+	}, true
+}
 
 // IntNode is an integer literal.
 type IntNode struct{ Value big.Int }
 
+func (IntNode) isnode() {}
+
+func (IntNode) Type(ref *Struct) (Type, bool) {
+	return Type{
+		TypeRef: &TypeRef{
+			Kind: UntypedNum,
+		},
+	}, true
+}
+
 // FloatNode is a floating point literal.
 type FloatNode struct{ Value big.Float }
 
-func (IdentNode) isnode() {}
-func (StrNode) isnode()   {}
-func (IntNode) isnode()   {}
 func (FloatNode) isnode() {}
+
+func (FloatNode) Type(ref *Struct) (Type, bool) {
+	return Type{
+		TypeRef: &TypeRef{
+			Kind: UntypedNum,
+		},
+	}, true
+}
 
 // ParseExpr parses an expression into an AST.
 func ParseExpr(src string) (*Expr, error) {
@@ -51,6 +97,10 @@ func MustParseExpr(src string) *Expr {
 		panic(err)
 	}
 	return expr
+}
+
+func (e *Expr) Type(ref *Struct) (Type, bool) {
+	return e.Root.Type(ref)
 }
 
 // # Lexing
