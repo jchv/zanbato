@@ -1,6 +1,6 @@
 package kaitai
 
-//go:generate go run golang.org/x/tools/cmd/stringer -type=Endianness
+//go:generate go run golang.org/x/tools/cmd/stringer -type=EndianKind
 
 // Param specifies a parameter to a struct.
 type Param struct {
@@ -10,18 +10,25 @@ type Param struct {
 	Enum string
 }
 
-// Endianness refers to a specific byte ordering.
-type Endianness int
+// EndianKind refers to a specific byte ordering.
+type EndianKind int
 
 const (
-	UnspecifiedOrder Endianness = iota
+	UnspecifiedOrder EndianKind = iota
 	BigEndian
 	LittleEndian
+	SwitchEndian
 )
+
+type Endian struct {
+	Kind     EndianKind
+	SwitchOn *Expr
+	Cases    map[string]EndianKind
+}
 
 // Meta contains the relevant metadata information.
 type Meta struct {
-	Endian  Endianness
+	Endian  Endian
 	Imports []string
 }
 

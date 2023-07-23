@@ -96,7 +96,7 @@ type Type struct {
 	TypeSwitch *TypeSwitch
 }
 
-func (t TypeRef) FoldEndian(endian Endianness) TypeRef {
+func (t TypeRef) FoldEndian(endian EndianKind) TypeRef {
 	switch endian {
 	case LittleEndian:
 		switch t.Kind {
@@ -140,7 +140,15 @@ func (t TypeRef) FoldEndian(endian Endianness) TypeRef {
 	return t
 }
 
-func (t TypeSwitch) FoldEndian(endian Endianness) TypeSwitch {
+func (t TypeRef) HasDependentEndian() bool {
+	switch t.Kind {
+	case U2, U4, U8, S2, S4, S8, F4, F8:
+		return true
+	}
+	return false
+}
+
+func (t TypeSwitch) FoldEndian(endian EndianKind) TypeSwitch {
 	cases := make(map[string]TypeRef)
 	for key, value := range t.Cases {
 		cases[key] = value.FoldEndian(endian)
@@ -149,7 +157,16 @@ func (t TypeSwitch) FoldEndian(endian Endianness) TypeSwitch {
 	return t
 }
 
-func (t Type) FoldEndian(endian Endianness) Type {
+func (t TypeSwitch) HasDependentEndian() bool {
+	for _, value := range t.Cases {
+		if value.HasDependentEndian() {
+			return true
+		}
+	}
+	return false
+}
+
+func (t Type) FoldEndian(endian EndianKind) Type {
 	typeRef := t.TypeRef
 	if typeRef != nil {
 		newTypeRef := typeRef.FoldEndian(endian)
@@ -164,6 +181,16 @@ func (t Type) FoldEndian(endian Endianness) Type {
 		TypeRef:    typeRef,
 		TypeSwitch: typeSwitch,
 	}
+}
+
+func (t Type) HasDependentEndian() bool {
+	if t.TypeRef != nil {
+		return t.TypeRef.HasDependentEndian()
+	}
+	if t.TypeSwitch != nil {
+		return t.TypeSwitch.HasDependentEndian()
+	}
+	return false
 }
 
 // Identifier is used to distinguish Kaitai identifiers.

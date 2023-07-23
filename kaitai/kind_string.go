@@ -38,11 +38,12 @@ func _() {
 	_ = x[Bytes-28]
 	_ = x[String-29]
 	_ = x[User-30]
+	_ = x[UntypedNum-31]
 }
 
-const _Kind_name = "U1U2U2leU2beU4U4leU4beU8U8leU8beS1S2S2leS2beS4S4leS4beS8S8leS8beBitsF4F4leF4beF8F8leF8beBytesStringUser"
+const _Kind_name = "U1U2U2leU2beU4U4leU4beU8U8leU8beS1S2S2leS2beS4S4leS4beS8S8leS8beBitsF4F4leF4beF8F8leF8beBytesStringUserUntypedNum"
 
-var _Kind_index = [...]uint8{0, 2, 4, 8, 12, 14, 18, 22, 24, 28, 32, 34, 36, 40, 44, 46, 50, 54, 56, 60, 64, 68, 70, 74, 78, 80, 84, 88, 93, 99, 103}
+var _Kind_index = [...]uint8{0, 2, 4, 8, 12, 14, 18, 22, 24, 28, 32, 34, 36, 40, 44, 46, 50, 54, 56, 60, 64, 68, 70, 74, 78, 80, 84, 88, 93, 99, 103, 113}
 
 func (i Kind) String() string {
 	i -= 1

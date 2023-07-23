@@ -26,3 +26,4 @@ Here are some of the features that do work:
 - ✅ Expressions
   + ⚠️ **Only basic literals and limited field access.** The groundwork for parsing expressions is present but unfinished.
   + ⚠️ **In addition, special variables are not implemented.**
+- ⚠️ **Instances are not implemented.**

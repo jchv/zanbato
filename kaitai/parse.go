@@ -1,7 +1,7 @@
 package kaitai
 
 import (
-	"errors"
+	"fmt"
 	"io"
 
 	"github.com/jchv/zanbato/kaitai/ksy"
@@ -30,11 +30,26 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 	result.Meta.Imports = typ.Meta.Imports
 
 	if typ.Meta.Endian.Value == "le" {
-		result.Meta.Endian = LittleEndian
+		result.Meta.Endian.Kind = LittleEndian
 	} else if typ.Meta.Endian.Value == "be" {
-		result.Meta.Endian = BigEndian
+		result.Meta.Endian.Kind = BigEndian
 	} else if len(typ.Meta.Endian.Cases) > 0 || typ.Meta.Endian.SwitchOn != "" {
-		return nil, errors.New("endian switching not supported")
+		switchOn, err := ParseExpr(typ.Meta.Endian.SwitchOn)
+		if err != nil {
+			return nil, err
+		}
+		result.Meta.Endian.Kind = SwitchEndian
+		result.Meta.Endian.SwitchOn = switchOn
+		result.Meta.Endian.Cases = make(map[string]EndianKind)
+		for key, value := range typ.Meta.Endian.Cases {
+			if value == "le" {
+				result.Meta.Endian.Cases[key] = LittleEndian
+			} else if value == "be" {
+				result.Meta.Endian.Cases[key] = BigEndian
+			} else {
+				return nil, fmt.Errorf("unknown endian value %s", value)
+			}
+		}
 	}
 
 	for _, spec := range typ.Params {
