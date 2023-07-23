@@ -1,15 +1,13 @@
 package ksy
 
 import (
-	"strconv"
-
 	"gopkg.in/yaml.v3"
 )
 
 // EnumValueSpec represents a single enum value.
 // #/definitions/EnumSpec
 type EnumValueSpec struct {
-	Value int
+	Value string
 	ID    Identifier
 }
 
@@ -20,7 +18,7 @@ func enumValuesToYAML(e EnumValuesSpec) *yaml.Node {
 	n := &yaml.Node{Kind: yaml.MappingNode}
 	for _, i := range e {
 		n.Content = append(n.Content,
-			&yaml.Node{Kind: yaml.ScalarNode, Value: strconv.Itoa(i.Value)},
+			&yaml.Node{Kind: yaml.ScalarNode, Value: i.Value},
 			&yaml.Node{Kind: yaml.ScalarNode, Value: string(i.ID), Tag: "!!str"})
 	}
 	return n

@@ -63,7 +63,7 @@ func (IntNode) isnode() {}
 func (IntNode) Type(ref *Struct) (Type, bool) {
 	return Type{
 		TypeRef: &TypeRef{
-			Kind: UntypedNum,
+			Kind: UntypedInt,
 		},
 	}, true
 }
@@ -76,9 +76,22 @@ func (FloatNode) isnode() {}
 func (FloatNode) Type(ref *Struct) (Type, bool) {
 	return Type{
 		TypeRef: &TypeRef{
-			Kind: UntypedNum,
+			Kind: UntypedInt,
 		},
 	}, true
+}
+
+// MemberNode is a member access expression
+type MemberNode struct {
+	Operand  Node
+	Property string
+}
+
+func (MemberNode) isnode() {}
+
+func (m MemberNode) Type(ref *Struct) (Type, bool) {
+	// TODO: handle symbol resolution
+	return Type{}, false
 }
 
 // ParseExpr parses an expression into an AST.
@@ -238,6 +251,11 @@ func (p *parser) strlit() Node {
 	}
 }
 
+const (
+	depthPrimaryExpr = 0
+	depthMemberExpr  = 1
+)
+
 func (p *parser) expr(depth int) Node {
 	var n Node
 	p.skipwhitespace()
@@ -251,8 +269,17 @@ func (p *parser) expr(depth int) Node {
 	case p.s[0] == '(':
 		n = p.expr(1)
 	}
+	if depth >= depthPrimaryExpr {
+		return n
+	}
 	for {
-		if depth >= 1 {
+		p.skipwhitespace()
+		if p.s[0] == '.' {
+			p.s = p.s[1:]
+			n = MemberNode{Operand: n, Property: p.token(isident)}
+			continue
+		}
+		if depth >= depthMemberExpr {
 			break
 		}
 		// TODO: Implement operators here.

@@ -1,8 +1,10 @@
 package kaitai
 
+import "math/big"
+
 // EnumValue contains a single enum value.
 type EnumValue struct {
-	Value int
+	Value *big.Int
 	ID    Identifier
 }
 

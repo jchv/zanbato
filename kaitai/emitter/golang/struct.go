@@ -136,7 +136,7 @@ func (e *Emitter) declTypeRef(n *kaitai.TypeRef, r kaitai.RepeatType) string {
 		return "[]" + e.declTypeRef(n, nil)
 	}
 	switch n.Kind {
-	case kaitai.UntypedNum:
+	case kaitai.UntypedInt:
 		return ""
 	case kaitai.U1:
 		return "uint8"
@@ -195,7 +195,7 @@ func (e *Emitter) declType(n kaitai.Type, r kaitai.RepeatType) string {
 
 func (e *Emitter) readCallRef(n *kaitai.TypeRef) string {
 	switch n.Kind {
-	case kaitai.UntypedNum:
+	case kaitai.UntypedInt:
 		panic("untyped number")
 	case kaitai.U2, kaitai.U4, kaitai.U8,
 		kaitai.S2, kaitai.S4, kaitai.S8,
@@ -347,7 +347,7 @@ func (e *Emitter) enumValueName(parent *kaitai.Struct, enum *kaitai.Enum, id kai
 func (e *Emitter) enum(unit *goUnit, enum *kaitai.Enum) {
 	g := goEnum{name: e.enumTypeName(e.parent(), enum), decltype: "int"}
 	for _, v := range enum.Values {
-		g.values = append(g.values, goEnumValue{name: e.enumValueName(e.parent(), enum, v.ID), value: v.Value})
+		g.values = append(g.values, goEnumValue{name: e.enumValueName(e.parent(), enum, v.ID), value: int(v.Value.Int64())})
 	}
 	unit.enums = append(unit.enums, g)
 }
@@ -382,10 +382,10 @@ func (e *Emitter) isValidEndianType(t kaitai.Type) bool {
 	}
 }
 
-func (e *Emitter) setParams(pfx, struc string, tr *kaitai.UserType, resolved *kaitai.Struct, fn *goFunc) {
+func (e *Emitter) setParams(struc string, tr *kaitai.UserType, resolved *kaitai.Struct, fn *goFunc) {
 	for i := range tr.Params {
 		field := e.typeName(resolved.Params[i].ID)
-		fn.printf("%s%s.%s = %s", pfx, struc, field, e.expr(tr.Params[i]))
+		fn.printf("%s.%s = %s", struc, field, e.expr(tr.Params[i]))
 	}
 }
 
@@ -414,146 +414,153 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, a *kaitai.Attr, forcedEndia
 
 	fieldName := e.fieldName(a.ID)
 
+	if a.If != nil {
+		fn.printf("if %s {", e.expr(a.If)).indent()
+	}
+
 	if typ.TypeSwitch != nil {
 		// Call type-switch helper
 		switchName := e.localPrefix() + e.typeSwitchName(typ.TypeSwitch.FieldName)
-		fn.printf("if err := this.read%s%s(io); err != nil {", switchName, endianSuffix)
-		fn.printf("\treturn err")
-		fn.printf("}")
-		return true
+		fn.printf("if err := this.read%s%s(io); err != nil {", switchName, endianSuffix).indent()
+		fn.printf("return err")
+		fn.unindent().printf("}")
+	} else {
+		switch typ.TypeRef.Kind {
+		case kaitai.User:
+			// ---------------------------------------------------------------------
+			// User case: Need to call Read method of field
+			// ---------------------------------------------------------------------
+			resolved := e.resolveLocalStruct(typ.TypeRef.User.Name)
+			if len(typ.TypeRef.User.Params) > 0 {
+				if resolved == nil {
+					panic(fmt.Errorf("unresolved type: %s", typ.TypeRef.User.Name))
+				}
+			} else {
+				if resolved == nil {
+					log.Printf("WARNING: unresolved type %s in %s.%s; missing import?", typ.TypeRef.User.Name, e.parent().ID, a.ID)
+				}
+			}
+			switch repeat := a.Repeat.(type) {
+			case kaitai.RepeatEOS:
+				fn.printf("for {").indent()
+
+				// EOF return
+				fn.printf("if eof, err := io.EOF(); err != nil {").indent()
+				fn.printf("return err")
+				fn.unindent().printf("} else if eof {").indent()
+				fn.printf("break")
+				fn.unindent().printf("}")
+
+				// Read
+				declType := e.declTypeRef(typ.TypeRef, nil)
+				fn.printf("tmp%d := %s{}", fn.tmp, declType)
+				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), typ.TypeRef.User, resolved.Struct(), fn)
+				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
+				fn.printf("return err")
+				fn.unindent().printf("}")
+				fn.printf("this.%s = append(this.%s, tmp%d)", fieldName, fieldName, fn.tmp)
+
+				fn.unindent().printf("}")
+
+			case kaitai.RepeatExpr:
+				iterType, ok := repeat.CountExpr.Type(e.parent())
+				iterCast := ""
+				if ok {
+					iterCast = e.declType(iterType, nil)
+				}
+				fn.printf("for i := %s(0); i < %s; i++ {", iterCast, e.expr(repeat.CountExpr)).indent()
+				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(typ.TypeRef, nil))
+				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), typ.TypeRef.User, resolved.Struct(), fn)
+				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
+				fn.printf("return err")
+				fn.unindent().printf("}")
+				fn.printf("this.%s = append(this.%s, tmp%d)", fieldName, fieldName, fn.tmp)
+				fn.unindent().printf("}")
+
+			case kaitai.RepeatUntil:
+				panic("not implemented: repeat until")
+
+			case nil:
+				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(typ.TypeRef, nil))
+				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), typ.TypeRef.User, resolved.Struct(), fn)
+				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
+				fn.printf("return err")
+				fn.unindent().printf("}")
+				fn.printf("this.%s = tmp%d", fieldName, fn.tmp)
+			}
+
+		default:
+			// ---------------------------------------------------------------------
+			// General case: Need to assign field using readCall function
+			// ---------------------------------------------------------------------
+			readCall := e.readCallRef(typ.TypeRef)
+
+			cast := ""
+			if a.Type.TypeRef != nil && a.Type.TypeRef.Kind == kaitai.String {
+				cast = "string"
+			}
+
+			switch repeat := a.Repeat.(type) {
+			case kaitai.RepeatEOS:
+				fn.printf("for {").indent()
+
+				// EOF return
+				fn.printf("if eof, err := io.EOF(); err != nil {").indent()
+				fn.printf("return err")
+				fn.unindent().printf("} else if eof {").indent()
+				fn.printf("break")
+				fn.unindent().printf("}")
+
+				// Read
+				fn.printf("tmp%d, err := %s", fn.tmp, readCall)
+				fn.printf("if err != nil {").indent()
+				fn.printf("return err")
+				fn.unindent().printf("}")
+				fn.printf("this.%s = append(this.%s, %s(tmp%d))", fieldName, fieldName, cast, fn.tmp)
+
+				fn.unindent().printf("}")
+
+			case kaitai.RepeatExpr:
+				iterType, ok := repeat.CountExpr.Type(e.parent())
+				iterCast := ""
+				if ok {
+					iterCast = e.declType(iterType, nil)
+				}
+				fn.printf("for i := %s(0); i < %s; i++ {", iterCast, e.expr(repeat.CountExpr)).indent()
+				fn.printf("tmp%d, err := %s", fn.tmp, readCall)
+				fn.printf("if err != nil {").indent()
+				fn.printf("return err")
+				fn.unindent().printf("\t}")
+				fn.printf("this.%s = append(this.%s, %s(tmp%d))", fieldName, fieldName, cast, fn.tmp)
+				fn.unindent().printf("}")
+
+			case kaitai.RepeatUntil:
+				panic("not implemented: repeat until")
+
+			case nil:
+				fn.printf("tmp%d, err := %s", fn.tmp, readCall)
+				fn.printf("if err != nil {").indent()
+				fn.printf("return err")
+				fn.unindent().printf("}")
+				fn.printf("this.%s = %s(tmp%d)", fieldName, cast, fn.tmp)
+			}
+
+			if a.Contents != nil {
+				e.setImport(unit, "bytes", "bytes")
+				e.setImport(unit, kaitaiRuntimePackagePath, kaitaiRuntimePackageName)
+
+				fn.printf("if !bytes.Equal(tmp%d, %#v) {", fn.tmp, a.Contents).indent()
+				fn.printf("return kaitai.NewValidationNotEqualError(%#v, tmp%d, io, \"\") // TODO: set srcPath", a.Contents, fn.tmp)
+				fn.unindent().printf("}")
+			}
+		}
 	}
 
-	switch typ.TypeRef.Kind {
-	case kaitai.User:
-		// ---------------------------------------------------------------------
-		// User case: Need to call Read method of field
-		// ---------------------------------------------------------------------
-		resolved := e.resolveLocalStruct(typ.TypeRef.User.Name)
-		if len(typ.TypeRef.User.Params) > 0 {
-			if resolved == nil {
-				panic(fmt.Errorf("unresolved type: %s", typ.TypeRef.User.Name))
-			}
-		} else {
-			if resolved == nil {
-				log.Printf("WARNING: unresolved type %s in %s.%s; missing import?", typ.TypeRef.User.Name, e.parent().ID, a.ID)
-			}
-		}
-		switch repeat := a.Repeat.(type) {
-		case kaitai.RepeatEOS:
-			fn.printf("for {")
-
-			// EOF return
-			fn.printf("\tif eof, err := io.EOF(); err != nil {")
-			fn.printf("\t\treturn err")
-			fn.printf("\t} else if eof {")
-			fn.printf("\t\tbreak")
-			fn.printf("\t}")
-
-			// Read
-			declType := e.declTypeRef(typ.TypeRef, nil)
-			fn.printf("\ttmp%d := %s{}", fn.tmp, declType)
-			e.setParams("\t", fmt.Sprintf("tmp%d", fn.tmp), typ.TypeRef.User, resolved.Struct(), fn)
-			fn.printf("\tif err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix)
-			fn.printf("\t\treturn err")
-			fn.printf("\t}")
-			fn.printf("\tthis.%s = append(this.%s, tmp%d)", fieldName, fieldName, fn.tmp)
-
-			fn.printf("}")
-
-		case kaitai.RepeatExpr:
-			iterType, ok := repeat.CountExpr.Type(e.parent())
-			iterCast := ""
-			if ok {
-				iterCast = e.declType(iterType, nil)
-			}
-			fn.printf("for i := %s(0); i < %s; i++ {", iterCast, e.expr(repeat.CountExpr))
-			fn.printf("\ttmp%d := %s{}", fn.tmp, e.declTypeRef(typ.TypeRef, nil))
-			e.setParams("\t", fmt.Sprintf("tmp%d", fn.tmp), typ.TypeRef.User, resolved.Struct(), fn)
-			fn.printf("\tif err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix)
-			fn.printf("\t\treturn err")
-			fn.printf("\t}")
-			fn.printf("\tthis.%s = append(this.%s, tmp%d)", fieldName, fieldName, fn.tmp)
-			fn.printf("}")
-
-		case kaitai.RepeatUntil:
-			panic("not implemented: repeat until")
-
-		case nil:
-			fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(typ.TypeRef, nil))
-			e.setParams("", fmt.Sprintf("tmp%d", fn.tmp), typ.TypeRef.User, resolved.Struct(), fn)
-			fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix)
-			fn.printf("\treturn err")
-			fn.printf("}")
-			fn.printf("this.%s = tmp%d", fieldName, fn.tmp)
-		}
-		return true
-
-	default:
-		// ---------------------------------------------------------------------
-		// General case: Need to assign field using readCall function
-		// ---------------------------------------------------------------------
-		readCall := e.readCallRef(typ.TypeRef)
-
-		cast := ""
-		if a.Type.TypeRef != nil && a.Type.TypeRef.Kind == kaitai.String {
-			cast = "string"
-		}
-
-		switch repeat := a.Repeat.(type) {
-		case kaitai.RepeatEOS:
-			fn.printf("for {")
-
-			// EOF return
-			fn.printf("\tif eof, err := io.EOF(); err != nil {")
-			fn.printf("\t\treturn err")
-			fn.printf("\t} else if eof {")
-			fn.printf("\t\tbreak")
-			fn.printf("\t}")
-
-			// Read
-			fn.printf("\ttmp%d, err := %s", fn.tmp, readCall)
-			fn.printf("\tif err != nil {")
-			fn.printf("\t\treturn err")
-			fn.printf("\t}")
-			fn.printf("\tthis.%s = append(this.%s, %s(tmp%d))", fieldName, fieldName, cast, fn.tmp)
-
-			fn.printf("}")
-
-		case kaitai.RepeatExpr:
-			iterType, ok := repeat.CountExpr.Type(e.parent())
-			iterCast := ""
-			if ok {
-				iterCast = e.declType(iterType, nil)
-			}
-			fn.printf("for i := %s(0); i < %s; i++ {", iterCast, e.expr(repeat.CountExpr))
-			fn.printf("\ttmp%d, err := %s", fn.tmp, readCall)
-			fn.printf("\tif err != nil {")
-			fn.printf("\t\treturn err")
-			fn.printf("\t}")
-			fn.printf("\tthis.%s = append(this.%s, %s(tmp%d))", fieldName, fieldName, cast, fn.tmp)
-			fn.printf("}")
-
-		case kaitai.RepeatUntil:
-			panic("not implemented: repeat until")
-
-		case nil:
-			fn.printf("tmp%d, err := %s", fn.tmp, readCall)
-			fn.printf("if err != nil {")
-			fn.printf("\treturn err")
-			fn.printf("}")
-			fn.printf("this.%s = %s(tmp%d)", fieldName, cast, fn.tmp)
-		}
-
-		if a.Contents != nil {
-			e.setImport(unit, "bytes", "bytes")
-			e.setImport(unit, kaitaiRuntimePackagePath, kaitaiRuntimePackageName)
-			fn.stmt = append(fn.stmt, goStatement{source: fmt.Sprintf(`if !bytes.Equal(tmp%d, %#v) {
-		return kaitai.NewValidationNotEqualError(%#v, tmp%d, io, "") // TODO: set srcPath
+	if a.If != nil {
+		fn.unindent().printf("}")
 	}
-`, fn.tmp, a.Contents, a.Contents, fn.tmp)})
-		}
-		return true
-	}
+
+	return true
 }
 
 func (e *Emitter) typeSwitchCaseValue(value string) string {
@@ -625,7 +632,6 @@ func (e *Emitter) typeSwitch(unit *goUnit, attr *kaitai.Attr, forceEndian kaitai
 		name: "read" + typeSwitchName + endianSuffix,
 		in:   []goVar{{name: "io", typ: "*" + kaitaiStream}},
 		out:  []goVar{{name: "err", typ: "error"}},
-		stmt: []goStatement{},
 	}
 	readFn.printf("switch %s {", e.expr(ts.SwitchOn))
 	for value, typ := range ts.Cases {
@@ -649,23 +655,26 @@ func (e *Emitter) typeSwitch(unit *goUnit, attr *kaitai.Attr, forceEndian kaitai
 					panic(fmt.Errorf("unresolved type: %s", typ.User.Name))
 				}
 			}
-			readFn.printf("case %s(%s):", typeCast, goValue)
-			readFn.printf("\ttmp%d := %s{}", readFn.tmp, goUnderlyingType)
-			e.setParams("\t", fmt.Sprintf("tmp%d", readFn.tmp), typ.User, chain.Struct(), &readFn)
-			readFn.printf("\tif err := tmp%d.Read(io); err != nil {", readFn.tmp)
-			readFn.printf("\t\treturn err")
-			readFn.printf("\t}")
-			readFn.printf("\tthis.%s = %s{Value: tmp%d}", fieldName, caseStruct, readFn.tmp)
+			readFn.printf("case %s(%s):", typeCast, goValue).indent()
+			readFn.printf("tmp%d := %s{}", readFn.tmp, goUnderlyingType)
+			e.setParams(fmt.Sprintf("tmp%d", readFn.tmp), typ.User, chain.Struct(), &readFn)
+			readFn.printf("if err := tmp%d.Read(io); err != nil {", readFn.tmp).indent()
+			readFn.printf("return err")
+			readFn.unindent().printf("}")
+
+			readFn.printf("this.%s = %s{Value: tmp%d}", fieldName, caseStruct, readFn.tmp)
+			readFn.unindent()
 
 		default:
 			typ = typ.FoldEndian(e.endian)
 			call := e.readCallRef(&typ)
-			readFn.printf("case %s(%s):", typeCast, goValue)
-			readFn.printf("\ttmp%d, err := %s", readFn.tmp, call)
-			readFn.printf("\tif err != nil {")
-			readFn.printf("\t\treturn err")
-			readFn.printf("\t}")
-			readFn.printf("\tthis.%s = %s{Value: tmp%d}", fieldName, caseStruct, readFn.tmp)
+			readFn.printf("case %s(%s):", typeCast, goValue).indent()
+			readFn.printf("tmp%d, err := %s", readFn.tmp, call)
+			readFn.printf("if err != nil {").indent()
+			readFn.printf("\treturn err")
+			readFn.unindent().printf("}")
+			readFn.printf("this.%s = %s{Value: tmp%d}", fieldName, caseStruct, readFn.tmp)
+			readFn.unindent()
 		}
 	}
 
@@ -724,7 +733,6 @@ func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, s *kaitai.Struct, forceE
 		name: "Read" + endianSuffix,
 		in:   []goVar{{name: "io", typ: "*" + kaitaiStream}},
 		out:  []goVar{{name: "err", typ: "error"}},
-		stmt: []goStatement{},
 	}
 	errExit := false
 	for _, attr := range s.Seq {
@@ -735,7 +743,7 @@ func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, s *kaitai.Struct, forceE
 		}
 	}
 	if !errExit {
-		readMethod.stmt = append(readMethod.stmt, goStatement{source: "return nil\n"})
+		readMethod.printf("return nil")
 	}
 	unit.methods = append(unit.methods, readMethod)
 }
@@ -743,26 +751,18 @@ func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, s *kaitai.Struct, forceE
 func (e *Emitter) endianStubs(unit *goUnit, gs *goStruct, ks *kaitai.Struct) {
 	e.setImport(unit, kaitaiRuntimePackagePath, kaitaiRuntimePackageName)
 	unit.methods = append(unit.methods, goFunc{
-		recv: goVar{name: "this", typ: "*" + gs.name},
-		name: "ReadBE",
-		in:   []goVar{{name: "io", typ: "*" + kaitaiStream}},
-		out:  []goVar{{name: "err", typ: "error"}},
-		stmt: []goStatement{
-			{
-				source: "return this.Read(io)\n",
-			},
-		},
+		recv:   goVar{name: "this", typ: "*" + gs.name},
+		name:   "ReadBE",
+		in:     []goVar{{name: "io", typ: "*" + kaitaiStream}},
+		out:    []goVar{{name: "err", typ: "error"}},
+		source: "\treturn this.Read(io)\n",
 	})
 	unit.methods = append(unit.methods, goFunc{
-		recv: goVar{name: "this", typ: "*" + gs.name},
-		name: "ReadLE",
-		in:   []goVar{{name: "io", typ: "*" + kaitaiStream}},
-		out:  []goVar{{name: "err", typ: "error"}},
-		stmt: []goStatement{
-			{
-				source: "return this.Read(io)\n",
-			},
-		},
+		recv:   goVar{name: "this", typ: "*" + gs.name},
+		name:   "ReadLE",
+		in:     []goVar{{name: "io", typ: "*" + kaitaiStream}},
+		out:    []goVar{{name: "err", typ: "error"}},
+		source: "\treturn this.Read(io)\n",
 	})
 }
 
@@ -774,21 +774,20 @@ func (e *Emitter) endianSwitch(unit *goUnit, gs *goStruct, ks *kaitai.Struct) {
 		name: "ReadBE",
 		in:   []goVar{{name: "io", typ: "*" + kaitaiStream}},
 		out:  []goVar{{name: "err", typ: "error"}},
-		stmt: []goStatement{},
 	}
 
-	fn.stmt = append(fn.stmt, goStatement{source: fmt.Sprintf("switch (%s) {\n", e.expr(ks.Meta.Endian.SwitchOn))})
+	fn.printf("switch %s {", e.expr(ks.Meta.Endian.SwitchOn))
 	for value, endian := range ks.Meta.Endian.Cases {
-		fn.stmt = append(fn.stmt, goStatement{source: fmt.Sprintf("case %s:\n", e.typeSwitchCaseValue(value))})
+		fn.printf("case %s:", e.typeSwitchCaseValue(value))
 		if endian == kaitai.LittleEndian {
-			fn.stmt = append(fn.stmt, goStatement{source: "\tthis.ReadLE(io)\n"})
+			fn.printf("\treturn this.ReadLE(io)")
 		} else {
-			fn.stmt = append(fn.stmt, goStatement{source: "\tthis.ReadBE(io)\n"})
+			fn.printf("\treturn this.ReadBE(io)")
 		}
 	}
-	fn.stmt = append(fn.stmt, goStatement{source: "default:\n"})
-	fn.stmt = append(fn.stmt, goStatement{source: "\treturn kaitai.UndecidedEndiannessError{}\n"})
-	fn.stmt = append(fn.stmt, goStatement{source: "}\n"})
+	fn.printf("default:")
+	fn.printf("\treturn kaitai.UndecidedEndiannessError{}")
+	fn.printf("}")
 
 	unit.methods = append(unit.methods, fn)
 }
@@ -942,29 +941,33 @@ func (g *goInterface) emit(buf io.Writer) {
 	fmt.Fprintf(buf, "type %s interface {\n\t%s\n}\n\n", g.name, g.methods)
 }
 
-type goStatement struct {
-	source string
-}
-
 type goFunc struct {
-	recv goVar
-	name string
-	tmp  int
-	in   goVarList
-	out  goVarList
-	stmt []goStatement
+	recv   goVar
+	name   string
+	tmp    int
+	in     goVarList
+	out    goVarList
+	source string
+	pfx    string
 }
 
 func (g *goFunc) emit(buf io.Writer) {
-	fmt.Fprintf(buf, "func (%s) %s(%s) (%s) {\n", g.recv.String(), g.name, g.in.String(), g.out.String())
-	for _, s := range g.stmt {
-		fmt.Fprintf(buf, "\t%s", s.source)
-	}
-	fmt.Fprintf(buf, "}\n\n")
+	fmt.Fprintf(buf, "func (%s) %s(%s) (%s) {\n%s}\n\n", g.recv.String(), g.name, g.in.String(), g.out.String(), g.source)
 }
 
-func (g *goFunc) printf(format string, args ...any) {
-	g.stmt = append(g.stmt, goStatement{source: fmt.Sprintf(format, args...) + "\n"})
+func (g *goFunc) printf(format string, args ...any) *goFunc {
+	g.source += "\t" + g.pfx + fmt.Sprintf(format, args...) + "\n"
+	return g
+}
+
+func (g *goFunc) indent() *goFunc {
+	g.pfx += "\t"
+	return g
+}
+
+func (g *goFunc) unindent() *goFunc {
+	g.pfx = g.pfx[:len(g.pfx)-1]
+	return g
 }
 
 type goEnumValue struct {

@@ -34,11 +34,12 @@ type Meta struct {
 
 // Struct contains a Kaitai struct.
 type Struct struct {
-	Doc     string
-	Meta    Meta
-	ID      Identifier
-	Params  []*Param
-	Seq     []*Attr
-	Structs []*Struct
-	Enums   []*Enum
+	Doc       string
+	Meta      Meta
+	ID        Identifier
+	Params    []*Param
+	Seq       []*Attr
+	Instances []*Attr
+	Structs   []*Struct
+	Enums     []*Enum
 }

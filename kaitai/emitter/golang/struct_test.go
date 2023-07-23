@@ -55,6 +55,14 @@ func (this *Attrs) Read(io *kaitai.Stream) (err error) {
 	return nil
 }
 
+func (this *Attrs) ReadBE(io *kaitai.Stream) (err error) {
+	return this.Read(io)
+}
+
+func (this *Attrs) ReadLE(io *kaitai.Stream) (err error) {
+	return this.Read(io)
+}
+
 `,
 		},
 	}

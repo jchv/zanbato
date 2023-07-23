@@ -3,6 +3,7 @@ package kaitai
 import (
 	"fmt"
 	"io"
+	"math/big"
 
 	"github.com/jchv/zanbato/kaitai/ksy"
 
@@ -80,6 +81,13 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 		}
 		result.Enums = append(result.Enums, enum)
 	}
+	for _, spec := range typ.Instances.Instances {
+		instance, err := translateInstanceSpec(spec)
+		if err != nil {
+			return nil, err
+		}
+		result.Instances = append(result.Instances, instance)
+	}
 	return result, nil
 }
 
@@ -120,7 +128,29 @@ func translateEnumSpec(id Identifier, typ ksy.EnumSpec) (*Enum, error) {
 	result := &Enum{}
 	result.ID = id
 	for _, val := range typ.Values {
-		result.Values = append(result.Values, EnumValue{val.Value, Identifier(val.ID)})
+		value := big.NewInt(0)
+		value.SetString(val.Value, 0)
+		result.Values = append(result.Values, EnumValue{value, Identifier(val.ID)})
 	}
 	return result, nil
+}
+
+func translateInstanceSpec(spec ksy.InstanceSpecItem) (*Attr, error) {
+	typ, err := ParseAttrType(ksy.AttributeSpec(spec.Value))
+	if err != nil {
+		return nil, err
+	}
+	return &Attr{
+		ID:       Identifier(spec.Key),
+		Doc:      spec.Value.Doc,
+		Contents: spec.Value.Contents,
+		Type:     typ,
+		Repeat:   ParseRepeat(ksy.AttributeSpec(spec.Value)),
+		Process:  MustParseExpr(spec.Value.Process),
+		If:       MustParseExpr(spec.Value.If),
+		Enum:     spec.Value.Enum,
+		Pos:      MustParseExpr(spec.Value.Pos),
+		IO:       MustParseExpr(spec.Value.IO),
+		Value:    MustParseExpr(spec.Value.Value),
+	}, nil
 }

@@ -38,7 +38,7 @@ func _() {
 	_ = x[Bytes-28]
 	_ = x[String-29]
 	_ = x[User-30]
-	_ = x[UntypedNum-31]
+	_ = x[UntypedInt-31]
 }
 
 const _Kind_name = "U1U2U2leU2beU4U4leU4beU8U8leU8beS1S2S2leS2beS4S4leS4beS8S8leS8beBitsF4F4leF4beF8F8leF8beBytesStringUserUntypedNum"

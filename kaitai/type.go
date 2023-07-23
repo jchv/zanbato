@@ -46,7 +46,9 @@ const (
 	Bytes
 	String
 	User
-	UntypedNum
+	UntypedInt
+	UntypedFloat
+	UntypedBool
 )
 
 // BytesType contains data for bytes types.

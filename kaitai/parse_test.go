@@ -36,8 +36,8 @@ func TestParse(t *testing.T) {
 			Struct: &Struct{
 				ID: "enums",
 				Enums: []*Enum{
-					{ID: "enum_a", Values: []EnumValue{{0, "value1"}, {1, "value2"}}},
-					{ID: "enum_b", Values: []EnumValue{{0, "b0"}, {1, "b1"}}},
+					{ID: "enum_a", Values: []EnumValue{{big.NewInt(0), "value1"}, {big.NewInt(1), "value2"}}},
+					{ID: "enum_b", Values: []EnumValue{{big.NewInt(0), "b0"}, {big.NewInt(1), "b1"}}},
 				},
 			},
 		},

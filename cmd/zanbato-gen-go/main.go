@@ -46,11 +46,11 @@ func main() {
 		outname := filepath.Join(*out, artifact.Filename)
 		file, err := os.Create(outname)
 		if err != nil {
-			log.Fatalf("Error creating %s: %w", outname, err)
+			log.Fatalf("Error creating %s: %v", outname, err)
 		}
 		_, err = file.Write(artifact.Body)
 		if err != nil {
-			log.Fatalf("Error writing %s: %w", outname, err)
+			log.Fatalf("Error writing %s: %v", outname, err)
 		}
 	}
 }
