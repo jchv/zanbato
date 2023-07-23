@@ -133,6 +133,16 @@ var StreamSymbolTable = map[string]*Symbol{
 	"pos":  NewMethodSymbol(MethodStreamPos, []ValueType{}, IntegerValueType),
 }
 
+func ArraySymbolTable(typ Type) map[string]*Symbol {
+	return map[string]*Symbol{
+		"first": NewMethodSymbol(MethodArrayFirst, []ValueType{}, ValueType{Type: typ}),
+		"last":  NewMethodSymbol(MethodArrayLast, []ValueType{}, ValueType{Type: typ}),
+		"size":  NewMethodSymbol(MethodArraySize, []ValueType{}, IntegerValueType),
+		"min":   NewMethodSymbol(MethodArrayMin, []ValueType{}, ValueType{Type: typ}),
+		"max":   NewMethodSymbol(MethodArrayMax, []ValueType{}, ValueType{Type: typ}),
+	}
+}
+
 // RootSymbol is a symbol used for symbol roots.
 type RootSymbol struct {
 }
@@ -334,11 +344,27 @@ func NewStringLiteralSymbol(value string) *Symbol {
 // must be set to a struct symbol.
 func NewAttrSymbol(context *Context, attr *Attr, parent *Symbol) *Symbol {
 	sym := &Symbol{
-		Parent:   parent,
-		Children: make(map[string]*Symbol),
-		Attr:     &AttrSymbol{Parent: parent.Struct.Struct, Attr: attr},
+		Parent: parent,
+		Attr:   &AttrSymbol{Parent: parent.Struct.Struct, Attr: attr},
 	}
-	// TODO: symbols? How do we handle a type switch?
+	// Note: typeswitch values need to be casted, so we don't add any methods
+	// to them.
+	if attr.Type.TypeRef != nil {
+		switch attr.Type.TypeRef.Kind {
+		case U1, U2, U2le, U2be, U4, U4le, U4be, U8, U8le, U8be,
+			S1, S2, S2le, S2be, S4, S4le, S4be, S8, S8le, S8be,
+			UntypedInt:
+			sym.Children = IntegerSymbolTable
+		case F4, F4le, F4be, F8, F8le, F8be, UntypedFloat:
+			sym.Children = FloatSymbolTable
+		case Bytes:
+			sym.Children = ByteArraySymbolTable
+		case String:
+			sym.Children = StringSymbolTable
+		case UntypedBool:
+			sym.Children = BooleanSymbolTable
+		}
+	}
 	return sym
 }
 
@@ -354,11 +380,6 @@ func NewStructSymbol(context *Context, struc *Struct, parent *Symbol) *Symbol {
 		sym.addDirectChild(string(attr.ID), NewAttrSymbol(context, attr, sym))
 	}
 	return sym
-}
-
-// addAlias adds a child as an alias and does not change its parent.
-func (s *Symbol) addAlias(symbol string, child *Symbol) {
-	s.Children[symbol] = child
 }
 
 // addDirectChild adds a child as a direct descendent and sets its parent to us.
