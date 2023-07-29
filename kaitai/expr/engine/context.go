@@ -740,7 +740,14 @@ func (context *Context) ResolveIntrinsic(name string) *ExprValue {
 }
 
 func (context *Context) ResolveLocalType(name string) *ExprType {
-	return context.local.Type.Child(name)
+	typ := context.local.Type.Child(name)
+	if typ != nil {
+		return typ
+	}
+	if context.local.Type.Parent != nil {
+		return context.local.Type.Parent.Child(name)
+	}
+	return nil
 }
 
 func (context *Context) ResolveModuleType(name string) *ExprType {
