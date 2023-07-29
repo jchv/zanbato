@@ -1,4 +1,4 @@
-package kaitai
+package expr
 
 import (
 	"math/big"
@@ -7,14 +7,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func MustParseBigFloat(s string) big.Float {
-	var fv big.Float
-
+func MustParseBigFloat(s string) *big.Float {
+	fv := big.NewFloat(0)
 	_, _, err := fv.Parse(s, 10)
 	if err != nil {
 		panic(err)
 	}
-
 	return fv
 }
 
@@ -29,15 +27,15 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			Source: "test",
-			Expr:   &Expr{Root: IdentNode{Value: "test"}},
+			Expr:   &Expr{Root: IdentNode{Identifier: "test"}},
 		},
 		{
 			Source: "1",
-			Expr:   &Expr{Root: IntNode{Value: *big.NewInt(1)}},
+			Expr:   &Expr{Root: IntNode{Integer: big.NewInt(1)}},
 		},
 		{
 			Source: "1.0",
-			Expr:   &Expr{Root: FloatNode{Value: MustParseBigFloat("1.0")}},
+			Expr:   &Expr{Root: FloatNode{Float: MustParseBigFloat("1.0")}},
 		},
 	}
 

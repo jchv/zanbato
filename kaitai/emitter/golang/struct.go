@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
-	"math/big"
 	"path"
 	"sort"
 	"strings"
@@ -13,6 +11,9 @@ import (
 
 	"github.com/jchv/zanbato/kaitai"
 	"github.com/jchv/zanbato/kaitai/emitter"
+	"github.com/jchv/zanbato/kaitai/expr"
+	"github.com/jchv/zanbato/kaitai/expr/engine"
+	"github.com/jchv/zanbato/kaitai/types"
 )
 
 const (
@@ -26,15 +27,11 @@ type ResolveFunc func(from, to string) (string, *kaitai.Struct)
 
 // Emitter emits Go code for kaitai structs.
 type Emitter struct {
-	pkgname  string
-	pkgpath  string
-	resolver ResolveFunc
-	endian   kaitai.EndianKind
-
-	r       *kaitai.Struct
-	stack   []*kaitai.Struct
-	imports *kaitai.Struct
-
+	pkgname   string
+	pkgpath   string
+	resolver  ResolveFunc
+	endian    types.EndianKind
+	context   *engine.Context
 	artifacts []emitter.Artifact
 }
 
@@ -44,6 +41,7 @@ func NewEmitter(pkgpath string, resolver ResolveFunc) *Emitter {
 		pkgname:  path.Base(pkgpath),
 		pkgpath:  pkgpath,
 		resolver: resolver,
+		context:  engine.NewContext(),
 	}
 }
 
@@ -65,8 +63,8 @@ func (e *Emitter) typeSwitchName(n kaitai.Identifier) string {
 	return e.typeName(n) + "_Cases"
 }
 
-func (e *Emitter) typeSwitchCaseTypeName(attr *kaitai.Attr, value string) string {
-	typeSwitchName := e.localPrefix() + e.typeSwitchName(attr.Type.TypeSwitch.FieldName)
+func (e *Emitter) typeSwitchCaseTypeName(typ *engine.ExprType, value string) string {
+	typeSwitchName := e.prefix(typ.Parent) + e.typeSwitchName(typ.Attr.Type.TypeSwitch.FieldName)
 	return typeSwitchName + "_" + value
 }
 
@@ -78,168 +76,140 @@ func (e *Emitter) setImport(unit *goUnit, pkg string, as string) {
 	unit.imports[pkg] = as
 }
 
-func (e *Emitter) resolveLocalStruct(id string) kaitai.StructChain {
-	// Resolve from parent scope
-	chain := e.parent().ResolveStruct(id)
-	if chain != nil {
-		return chain
+func (e *Emitter) resolveType(ex string) *engine.ExprType {
+	typ := engine.ResultTypeOfExpr(e.context, expr.MustParseExpr(ex)).Type()
+	if typ == nil {
+		panic(fmt.Errorf("unresolved type: %s", ex))
 	}
-
-	// Resolve from root scope
-	chain = e.r.ResolveStruct(id)
-	if chain != nil {
-		return chain
-	}
-
-	// Resolve from imports
-	chain = e.imports.ResolveStruct(id)
-	if chain != nil {
-		return chain
-	}
-
-	return nil
+	return typ
 }
 
-func (e *Emitter) resolveLocalEnum(id string) (kaitai.StructChain, *kaitai.Enum) {
-	// Resolve from parent scope
-	chain, localEnum := e.parent().ResolveEnum(id)
-	if localEnum != nil {
-		return chain, localEnum
-	}
-
-	// Resolve from root scope
-	chain, localEnum = e.r.ResolveEnum(id)
-	if localEnum != nil {
-		return chain, localEnum
-	}
-
-	// Resolve from imports
-	chain, localEnum = e.imports.ResolveEnum(id)
-	if localEnum != nil {
-		return chain, localEnum
-	}
-
-	return nil, nil
-}
-
-func (e *Emitter) resolveLocalEnumValue(id string) (kaitai.StructChain, *kaitai.Enum, kaitai.Identifier) {
-	i := strings.LastIndex(id, "::")
-	if i < 0 {
-		return nil, nil, ""
-	}
-	chain, enum := e.resolveLocalEnum(id[:i])
-	return chain, enum, kaitai.Identifier(id[i+2:])
-}
-
-func (e *Emitter) declTypeRef(n *kaitai.TypeRef, r kaitai.RepeatType) string {
+func (e *Emitter) declTypeRef(n *types.TypeRef, r types.RepeatType) string {
 	if r != nil {
 		return "[]" + e.declTypeRef(n, nil)
 	}
 	switch n.Kind {
-	case kaitai.UntypedInt:
-		return ""
-	case kaitai.U1:
-		return "uint8"
-	case kaitai.U2, kaitai.U2le, kaitai.U2be:
-		return "uint16"
-	case kaitai.U4, kaitai.U4le, kaitai.U4be:
-		return "uint32"
-	case kaitai.U8, kaitai.U8le, kaitai.U8be:
-		return "uint64"
-	case kaitai.S1:
-		return "int8"
-	case kaitai.S2, kaitai.S2le, kaitai.S2be:
-		return "int16"
-	case kaitai.S4, kaitai.S4le, kaitai.S4be:
-		return "int32"
-	case kaitai.S8, kaitai.S8le, kaitai.S8be:
-		return "int64"
-	case kaitai.Bits:
-		return "uint64"
-	case kaitai.F4, kaitai.F4le, kaitai.F4be:
-		return "float32"
-	case kaitai.F8, kaitai.F8le, kaitai.F8be:
+	case types.UntypedInt:
+		return "int"
+	case types.UntypedFloat:
 		return "float64"
-	case kaitai.Bytes:
+	case types.UntypedBool:
+		return "bool"
+	case types.U1:
+		return "uint8"
+	case types.U2, types.U2le, types.U2be:
+		return "uint16"
+	case types.U4, types.U4le, types.U4be:
+		return "uint32"
+	case types.U8, types.U8le, types.U8be:
+		return "uint64"
+	case types.S1:
+		return "int8"
+	case types.S2, types.S2le, types.S2be:
+		return "int16"
+	case types.S4, types.S4le, types.S4be:
+		return "int32"
+	case types.S8, types.S8le, types.S8be:
+		return "int64"
+	case types.Bits:
+		return "uint64"
+	case types.F4, types.F4le, types.F4be:
+		return "float32"
+	case types.F8, types.F8le, types.F8be:
+		return "float64"
+	case types.Bytes:
 		return "[]byte"
-	case kaitai.String:
+	case types.String:
 		return "string"
-	case kaitai.User:
-		if chain := e.resolveLocalStruct(n.User.Name); chain != nil {
-			return e.prefix(chain.Parent().Struct()) + e.typeName(kaitai.Identifier(n.User.Name))
-		} else if chain, enum := e.resolveLocalEnum(n.User.Name); enum != nil {
-			return e.prefix(chain.Struct()) + e.typeName(kaitai.Identifier(n.User.Name))
-		} else {
-			return e.typeName(kaitai.Identifier(n.User.Name))
+	case types.User:
+		typ := e.resolveType(n.User.Name)
+		switch typ.Kind {
+		case engine.StructKind:
+			return e.prefix(typ.Parent) + e.typeName(typ.Struct.Type.ID)
+		case engine.EnumKind:
+			return e.prefix(typ.Parent) + e.typeName(typ.Enum.ID)
+		default:
+			panic(fmt.Errorf("expression %q yielded unexpected type %s", n.User.Name, typ.Kind))
 		}
 	}
 	panic("unexpected typekind: " + n.Kind.String())
 }
 
-func (e *Emitter) declTypeSwitch(n *kaitai.TypeSwitch, r kaitai.RepeatType) string {
+func (e *Emitter) declTypeSwitch(parent *engine.ExprType, n *types.TypeSwitch, r types.RepeatType) string {
 	if r != nil {
-		return "[]" + e.declTypeSwitch(n, nil)
+		return "[]" + e.declTypeSwitch(parent, n, nil)
 	}
-	return e.localPrefix() + e.typeSwitchName(n.FieldName)
+	return e.prefix(parent) + e.typeSwitchName(n.FieldName)
 }
 
-func (e *Emitter) declType(n kaitai.Type, r kaitai.RepeatType) string {
-	if n.TypeRef != nil {
-		return e.declTypeRef(n.TypeRef, r)
-	} else if n.TypeSwitch != nil {
-		return e.declTypeSwitch(n.TypeSwitch, r)
-	} else {
-		panic("invalid type")
+func (e *Emitter) declType(typ *engine.ExprType) string {
+	switch typ.Kind {
+	case engine.StructKind:
+		return e.prefix(typ.Parent) + e.typeName(typ.Struct.Type.ID)
+	case engine.EnumKind:
+		return e.prefix(typ.Parent) + e.typeName(typ.Enum.ID)
+	default:
+		vt, ok := typ.ValueType()
+		if !ok {
+			return ""
+		}
+		if vt.Type.TypeRef != nil {
+			return e.declTypeRef(vt.Type.TypeRef, vt.Repeat)
+		} else if vt.Type.TypeSwitch != nil {
+			return e.declTypeSwitch(typ.Parent, vt.Type.TypeSwitch, vt.Repeat)
+		} else {
+			panic("invalid type")
+		}
 	}
 }
 
-func (e *Emitter) readCallRef(n *kaitai.TypeRef) string {
+func (e *Emitter) readCallRef(n *types.TypeRef) string {
 	switch n.Kind {
-	case kaitai.UntypedInt:
+	case types.UntypedInt:
 		panic("untyped number")
-	case kaitai.U2, kaitai.U4, kaitai.U8,
-		kaitai.S2, kaitai.S4, kaitai.S8,
-		kaitai.F4, kaitai.F8:
+	case types.U2, types.U4, types.U8,
+		types.S2, types.S4, types.S8,
+		types.F4, types.F8:
 		panic("undecided endianness")
-	case kaitai.U1:
+	case types.U1:
 		return "io.ReadU1()"
-	case kaitai.U2le:
+	case types.U2le:
 		return "io.ReadU2le()"
-	case kaitai.U2be:
+	case types.U2be:
 		return "io.ReadU2be()"
-	case kaitai.U4le:
+	case types.U4le:
 		return "io.ReadU4le()"
-	case kaitai.U4be:
+	case types.U4be:
 		return "io.ReadU4be()"
-	case kaitai.U8le:
+	case types.U8le:
 		return "io.ReadU8le()"
-	case kaitai.U8be:
+	case types.U8be:
 		return "io.ReadU8be()"
-	case kaitai.S1:
+	case types.S1:
 		return "io.ReadS1()"
-	case kaitai.S2le:
+	case types.S2le:
 		return "io.ReadS2le()"
-	case kaitai.S2be:
+	case types.S2be:
 		return "io.ReadS2be()"
-	case kaitai.S4le:
+	case types.S4le:
 		return "io.ReadS4le()"
-	case kaitai.S4be:
+	case types.S4be:
 		return "io.ReadS4be()"
-	case kaitai.S8le:
+	case types.S8le:
 		return "io.ReadS8le()"
-	case kaitai.S8be:
+	case types.S8be:
 		return "io.ReadS8be()"
-	case kaitai.Bits:
+	case types.Bits:
 		panic("not implemented yet: bits")
-	case kaitai.F4le:
+	case types.F4le:
 		return "io.ReadF4le()"
-	case kaitai.F4be:
+	case types.F4be:
 		return "io.ReadF4be()"
-	case kaitai.F8le:
+	case types.F8le:
 		return "io.ReadF8le()"
-	case kaitai.F8be:
+	case types.F8be:
 		return "io.ReadF8be()"
-	case kaitai.Bytes:
+	case types.Bytes:
 		if n.Bytes.Size != nil {
 			return fmt.Sprintf("io.ReadBytes(int(%s))", e.expr(n.Bytes.Size))
 		}
@@ -247,7 +217,7 @@ func (e *Emitter) readCallRef(n *kaitai.TypeRef) string {
 			return "io.ReadBytesFull()"
 		}
 		panic("not implemented yet: bytes")
-	case kaitai.String:
+	case types.String:
 		if n.String.SizeEOS {
 			return fmt.Sprintf("io.ReadStrEOS(%q)", n.String.Encoding)
 		}
@@ -263,30 +233,150 @@ func (e *Emitter) readCallRef(n *kaitai.TypeRef) string {
 			}
 			return fmt.Sprintf("io.ReadBytesTerm(%q, %v, %v, %v)", rune(n.String.Terminator), n.String.Include, n.String.Consume, n.String.EosError)
 		}
-	case kaitai.User:
+	case types.User:
 		panic("called readCallRef on user type!")
 	}
 	panic("unexpected typekind: " + n.Kind.String())
 }
 
-func (e *Emitter) expr(expr *kaitai.Expr) string {
+func (e *Emitter) expr(expr *expr.Expr) string {
 	return e.exprNode(expr.Root)
 }
 
-func (e *Emitter) exprNode(node kaitai.Node) string {
+func (e *Emitter) calcPromotionTypeKind(a types.Kind, b types.Kind) string {
+	if a > b {
+		a, b = b, a
+	}
+
+	return e.declTypeRef(&types.TypeRef{Kind: a.Promote(b)}, nil)
+}
+
+func (e *Emitter) calcPromotionTypeRef(a *types.TypeRef, b *types.TypeRef) string {
+	return e.calcPromotionTypeKind(a.Kind, b.Kind)
+}
+
+func (e *Emitter) calcPromotionExprType(a *engine.ExprType, b *engine.ExprType) string {
+	vta, ok := a.ValueType()
+	if !ok {
+		return ""
+	}
+	vtb, ok := b.ValueType()
+	if !ok {
+		return ""
+	}
+	return e.calcPromotionTypeRef(vta.Type.TypeRef, vtb.Type.TypeRef)
+}
+
+func (e *Emitter) calcPromotionExprValue(a *engine.ExprValue, b *engine.ExprValue) string {
+	return e.calcPromotionExprType(a.Type, b.Type)
+}
+
+func (e *Emitter) calcPromotionNode(a expr.Node, b expr.Node) string {
+	av := engine.ResultTypeOfNode(e.context, a).Value()
+	if av == nil {
+		return ""
+	}
+	bv := engine.ResultTypeOfNode(e.context, b).Value()
+	if bv == nil {
+		return ""
+	}
+	return e.calcPromotionExprValue(av, bv)
+}
+
+func (e *Emitter) exprPromotionBinaryNode(n expr.BinaryNode) string {
+	switch n.Op {
+	case expr.OpAdd, expr.OpSub, expr.OpMult, expr.OpDiv, expr.OpMod,
+		expr.OpLessThan, expr.OpLessThanEqual,
+		expr.OpGreaterThan, expr.OpGreaterThanEqual,
+		expr.OpEqual, expr.OpNotEqual,
+		expr.OpBitAnd, expr.OpBitOr, expr.OpBitXor,
+		expr.OpLogicalAnd, expr.OpLogicalOr:
+		return e.calcPromotionNode(n.A, n.B)
+
+	default:
+		// Should not need to cast.
+		return ""
+	}
+}
+
+func (e *Emitter) exprBinaryNode(t expr.BinaryNode) string {
+	cast := e.exprPromotionBinaryNode(t)
+	switch t.Op {
+	case expr.OpAdd:
+		return fmt.Sprintf("%s(%s) + %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpSub:
+		return fmt.Sprintf("%s(%s) - %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpMult:
+		return fmt.Sprintf("%s(%s) * %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpDiv:
+		return fmt.Sprintf("%s(%s) / %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpMod:
+		return fmt.Sprintf("%s(%s) %% %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpLessThan:
+		return fmt.Sprintf("%s(%s) < %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpLessThanEqual:
+		return fmt.Sprintf("%s(%s) <= %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpGreaterThan:
+		return fmt.Sprintf("%s(%s) > %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpGreaterThanEqual:
+		return fmt.Sprintf("%s(%s) >= %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpEqual:
+		return fmt.Sprintf("%s(%s) == %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpNotEqual:
+		return fmt.Sprintf("%s(%s) != %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpShiftLeft:
+		return fmt.Sprintf("%s(%s) << %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpShiftRight:
+		return fmt.Sprintf("%s(%s) >> %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpBitAnd:
+		return fmt.Sprintf("%s(%s) & %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpBitOr:
+		return fmt.Sprintf("%s(%s) | %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpBitXor:
+		return fmt.Sprintf("%s(%s) ^ %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpLogicalAnd:
+		return fmt.Sprintf("%s(%s) && %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	case expr.OpLogicalOr:
+		return fmt.Sprintf("%s(%s) || %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+	default:
+		panic(fmt.Errorf("unsupported binary op %s", t.Op))
+	}
+}
+
+func (e *Emitter) exprNode(node expr.Node) string {
 	switch t := node.(type) {
-	case kaitai.IdentNode:
-		// TODO: not really
-		return "this." + e.fieldName(kaitai.Identifier(t.Value))
-	case kaitai.IntNode:
-		return t.Value.String()
+	case expr.IdentNode, expr.ScopeNode, expr.MemberNode:
+		v := engine.ResultTypeOfNode(e.context, t).Value()
+		if v == nil {
+			panic(fmt.Errorf("unable to use subexpression %s as value", t))
+		}
+		switch v.Type.Kind {
+		case engine.ParamKind:
+			// TODO: need to handle struct/instance navigation...
+			return fmt.Sprintf("this.%s", e.fieldName(v.Type.Param.ID))
+		case engine.AttrKind:
+			// TODO: need to handle struct/instance navigation...
+			return fmt.Sprintf("this.%s", e.fieldName(v.Type.Attr.ID))
+		case engine.IntegerKind:
+			if v.Type.Parent != nil && v.Type.Parent.Kind == engine.EnumValueKind {
+				return e.enumValueName(e.parentStruct(v), e.parentEnum(v), v.Type.Parent.EnumValue.ID)
+			} else {
+				panic(fmt.Errorf("unexpected constant in subexpression %s", t))
+			}
+		default:
+			panic(fmt.Errorf("unsupported value type reference %s in subexpression %s", v.Type.Kind, t))
+		}
+	case expr.IntNode:
+		return t.Integer.String()
+	case expr.BinaryNode:
+		return e.exprBinaryNode(t)
 	default:
 		panic(fmt.Errorf("unsupported expression node %T", t))
 	}
 }
 
 func (e *Emitter) root(inputname string, s *kaitai.Struct) {
-	if s.Meta.Endian.Kind != kaitai.UnspecifiedOrder {
+	if s.Meta.Endian.Kind != types.UnspecifiedOrder {
 		e.endian = s.Meta.Endian.Kind
 	}
 
@@ -296,13 +386,16 @@ func (e *Emitter) root(inputname string, s *kaitai.Struct) {
 	}
 
 	// Pivot stack to new root
-	oldRoot, oldStack, oldImports := e.r, e.stack, e.imports
-	e.r, e.stack, e.imports = s, []*kaitai.Struct{}, &kaitai.Struct{}
+	root := engine.NewStructValueSymbol(engine.NewStructTypeSymbol(s, nil), nil)
+	e.context.AddGlobalType(string(s.ID), root.Type)
+	e.context.AddModuleType(string(s.ID), root.Type)
+	oldContext := e.context
+	e.context = e.context.WithModuleRoot(root).WithLocalRoot(root)
 
-	e.struc(inputname, &unit, s)
+	e.struc(inputname, &unit, root)
 
 	// Pivot back to old root
-	e.r, e.stack, e.imports = oldRoot, oldStack, oldImports
+	e.context = oldContext
 
 	out := bytes.Buffer{}
 	unit.emit(&out)
@@ -313,57 +406,42 @@ func (e *Emitter) root(inputname string, s *kaitai.Struct) {
 	})
 }
 
-func (e *Emitter) push(s *kaitai.Struct) {
-	e.stack = append(e.stack, s)
+func (e *Emitter) push(val *engine.ExprValue) {
+	e.context = e.context.WithLocalRoot(val)
 }
 
 func (e *Emitter) pop() {
-	e.stack[len(e.stack)-1] = nil
-	e.stack = e.stack[:len(e.stack)-1]
+	e.context = e.context.Parent()
 }
 
-func (e *Emitter) parent() *kaitai.Struct {
-	if len(e.stack) < 1 {
-		return nil
-	}
-	return e.stack[len(e.stack)-1]
-}
-
-func (e *Emitter) grandparent() *kaitai.Struct {
-	if len(e.stack) < 2 {
-		return nil
-	}
-	return e.stack[len(e.stack)-2]
-}
-
-func (e *Emitter) enumTypeName(parent *kaitai.Struct, enum *kaitai.Enum) string {
+func (e *Emitter) enumTypeName(parent *engine.ExprType, enum *kaitai.Enum) string {
 	return e.prefix(parent) + e.typeName(enum.ID)
 }
 
-func (e *Emitter) enumValueName(parent *kaitai.Struct, enum *kaitai.Enum, id kaitai.Identifier) string {
+func (e *Emitter) enumValueName(parent *engine.ExprType, enum *kaitai.Enum, id kaitai.Identifier) string {
 	return e.prefix(parent) + e.typeName(enum.ID) + "__" + e.typeName(id)
 }
 
-func (e *Emitter) enum(unit *goUnit, enum *kaitai.Enum) {
-	g := goEnum{name: e.enumTypeName(e.parent(), enum), decltype: "int"}
-	for _, v := range enum.Values {
-		g.values = append(g.values, goEnumValue{name: e.enumValueName(e.parent(), enum, v.ID), value: int(v.Value.Int64())})
+func (e *Emitter) enum(unit *goUnit, enum *engine.ExprType) {
+	g := goEnum{name: e.enumTypeName(enum.Parent, enum.Enum), decltype: "int"}
+	for _, v := range enum.Enum.Values {
+		g.values = append(g.values, goEnumValue{name: e.enumValueName(enum.Parent, enum.Enum, v.ID), value: int(v.Value.Int64())})
 	}
 	unit.enums = append(unit.enums, g)
 }
 
-func (e *Emitter) isValidEndianTypeRef(t *kaitai.TypeRef) bool {
+func (e *Emitter) isValidEndianTypeRef(t *types.TypeRef) bool {
 	switch t.Kind {
-	case kaitai.U2, kaitai.U4, kaitai.U8,
-		kaitai.S2, kaitai.S4, kaitai.S8,
-		kaitai.F4, kaitai.F8:
+	case types.U2, types.U4, types.U8,
+		types.S2, types.S4, types.S8,
+		types.F4, types.F8:
 		return false
 	default:
 		return true
 	}
 }
 
-func (e *Emitter) isValidEndianTypeSwitch(t *kaitai.TypeSwitch) bool {
+func (e *Emitter) isValidEndianTypeSwitch(t *types.TypeSwitch) bool {
 	for _, value := range t.Cases {
 		if !e.isValidEndianTypeRef(&value) {
 			return false
@@ -372,7 +450,7 @@ func (e *Emitter) isValidEndianTypeSwitch(t *kaitai.TypeSwitch) bool {
 	return true
 }
 
-func (e *Emitter) isValidEndianType(t kaitai.Type) bool {
+func (e *Emitter) isValidEndianType(t types.Type) bool {
 	if t.TypeRef != nil {
 		return e.isValidEndianTypeRef(t.TypeRef)
 	} else if t.TypeSwitch != nil {
@@ -382,14 +460,16 @@ func (e *Emitter) isValidEndianType(t kaitai.Type) bool {
 	}
 }
 
-func (e *Emitter) setParams(struc string, tr *kaitai.UserType, resolved *kaitai.Struct, fn *goFunc) {
+func (e *Emitter) setParams(struc string, tr *types.UserType, resolved *kaitai.Struct, fn *goFunc) {
 	for i := range tr.Params {
 		field := e.typeName(resolved.Params[i].ID)
 		fn.printf("%s.%s = %s", struc, field, e.expr(tr.Params[i]))
 	}
 }
 
-func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, a *kaitai.Attr, forcedEndian kaitai.EndianKind) bool {
+func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, forcedEndian types.EndianKind) bool {
+	a := typ.Attr
+
 	defer func() {
 		if r := recover(); r != nil {
 			panic(fmt.Errorf("attr: %s: %s", a.ID, r))
@@ -397,15 +477,15 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, a *kaitai.Attr, forcedEndia
 	}()
 
 	endianSuffix := ""
-	if forcedEndian == kaitai.LittleEndian {
+	if forcedEndian == types.LittleEndian {
 		endianSuffix = "LE"
-	} else if forcedEndian == kaitai.BigEndian {
+	} else if forcedEndian == types.BigEndian {
 		endianSuffix = "BE"
 	}
 
-	typ := a.Type.FoldEndian(e.endian)
+	rt := a.Type.FoldEndian(e.endian)
 
-	if !e.isValidEndianType(typ) {
+	if !e.isValidEndianType(rt) {
 		fn.printf("return kaitai.UndecidedEndiannessError{}")
 		return false
 	}
@@ -418,30 +498,24 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, a *kaitai.Attr, forcedEndia
 		fn.printf("if %s {", e.expr(a.If)).indent()
 	}
 
-	if typ.TypeSwitch != nil {
+	if rt.TypeSwitch != nil {
 		// Call type-switch helper
-		switchName := e.localPrefix() + e.typeSwitchName(typ.TypeSwitch.FieldName)
+		switchName := e.prefix(typ.Parent) + e.typeSwitchName(rt.TypeSwitch.FieldName)
 		fn.printf("if err := this.read%s%s(io); err != nil {", switchName, endianSuffix).indent()
 		fn.printf("return err")
 		fn.unindent().printf("}")
 	} else {
-		switch typ.TypeRef.Kind {
-		case kaitai.User:
+		switch rt.TypeRef.Kind {
+		case types.User:
 			// ---------------------------------------------------------------------
 			// User case: Need to call Read method of field
 			// ---------------------------------------------------------------------
-			resolved := e.resolveLocalStruct(typ.TypeRef.User.Name)
-			if len(typ.TypeRef.User.Params) > 0 {
-				if resolved == nil {
-					panic(fmt.Errorf("unresolved type: %s", typ.TypeRef.User.Name))
-				}
-			} else {
-				if resolved == nil {
-					log.Printf("WARNING: unresolved type %s in %s.%s; missing import?", typ.TypeRef.User.Name, e.parent().ID, a.ID)
-				}
+			resolved := e.resolveType(rt.TypeRef.User.Name)
+			if resolved.Kind != engine.StructKind {
+				panic(fmt.Errorf("expression %q yielded unexpected type %s (expected struct)", rt.TypeRef.User.Name, resolved.Kind))
 			}
 			switch repeat := a.Repeat.(type) {
-			case kaitai.RepeatEOS:
+			case types.RepeatEOS:
 				fn.printf("for {").indent()
 
 				// EOF return
@@ -452,9 +526,9 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, a *kaitai.Attr, forcedEndia
 				fn.unindent().printf("}")
 
 				// Read
-				declType := e.declTypeRef(typ.TypeRef, nil)
+				declType := e.declTypeRef(rt.TypeRef, nil)
 				fn.printf("tmp%d := %s{}", fn.tmp, declType)
-				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), typ.TypeRef.User, resolved.Struct(), fn)
+				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), rt.TypeRef.User, resolved.Struct.Type, fn)
 				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
@@ -462,27 +536,24 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, a *kaitai.Attr, forcedEndia
 
 				fn.unindent().printf("}")
 
-			case kaitai.RepeatExpr:
-				iterType, ok := repeat.CountExpr.Type(e.parent())
-				iterCast := ""
-				if ok {
-					iterCast = e.declType(iterType, nil)
-				}
+			case types.RepeatExpr:
+				iterType := engine.ResultTypeOfExpr(e.context, repeat.CountExpr)
+				iterCast := e.declType(iterType.Value().Type)
 				fn.printf("for i := %s(0); i < %s; i++ {", iterCast, e.expr(repeat.CountExpr)).indent()
-				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(typ.TypeRef, nil))
-				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), typ.TypeRef.User, resolved.Struct(), fn)
+				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
+				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), rt.TypeRef.User, resolved.Struct.Type, fn)
 				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
 				fn.printf("this.%s = append(this.%s, tmp%d)", fieldName, fieldName, fn.tmp)
 				fn.unindent().printf("}")
 
-			case kaitai.RepeatUntil:
+			case types.RepeatUntil:
 				panic("not implemented: repeat until")
 
 			case nil:
-				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(typ.TypeRef, nil))
-				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), typ.TypeRef.User, resolved.Struct(), fn)
+				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
+				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), rt.TypeRef.User, resolved.Struct.Type, fn)
 				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
@@ -493,15 +564,15 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, a *kaitai.Attr, forcedEndia
 			// ---------------------------------------------------------------------
 			// General case: Need to assign field using readCall function
 			// ---------------------------------------------------------------------
-			readCall := e.readCallRef(typ.TypeRef)
+			readCall := e.readCallRef(rt.TypeRef)
 
 			cast := ""
-			if a.Type.TypeRef != nil && a.Type.TypeRef.Kind == kaitai.String {
+			if a.Type.TypeRef != nil && a.Type.TypeRef.Kind == types.String {
 				cast = "string"
 			}
 
 			switch repeat := a.Repeat.(type) {
-			case kaitai.RepeatEOS:
+			case types.RepeatEOS:
 				fn.printf("for {").indent()
 
 				// EOF return
@@ -520,12 +591,9 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, a *kaitai.Attr, forcedEndia
 
 				fn.unindent().printf("}")
 
-			case kaitai.RepeatExpr:
-				iterType, ok := repeat.CountExpr.Type(e.parent())
-				iterCast := ""
-				if ok {
-					iterCast = e.declType(iterType, nil)
-				}
+			case types.RepeatExpr:
+				iterType := engine.ResultTypeOfExpr(e.context, repeat.CountExpr)
+				iterCast := e.declType(iterType.Value().Type)
 				fn.printf("for i := %s(0); i < %s; i++ {", iterCast, e.expr(repeat.CountExpr)).indent()
 				fn.printf("tmp%d, err := %s", fn.tmp, readCall)
 				fn.printf("if err != nil {").indent()
@@ -534,7 +602,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, a *kaitai.Attr, forcedEndia
 				fn.printf("this.%s = append(this.%s, %s(tmp%d))", fieldName, fieldName, cast, fn.tmp)
 				fn.unindent().printf("}")
 
-			case kaitai.RepeatUntil:
+			case types.RepeatUntil:
 				panic("not implemented: repeat until")
 
 			case nil:
@@ -563,23 +631,44 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, a *kaitai.Attr, forcedEndia
 	return true
 }
 
-func (e *Emitter) typeSwitchCaseValue(value string) string {
-	i := big.NewInt(0)
-	numeric, ok := i.SetString(value, 0)
-	if !ok {
-		// TODO: type resolution? current prefix is wrong
-		chain, enum, id := e.resolveLocalEnumValue(value)
-		if enum == nil {
-			log.Fatalf("couldn't resolve %s in %+v", value, e.parent())
+func (e *Emitter) parentStruct(val *engine.ExprValue) *engine.ExprType {
+	typ := val.Type
+	for typ != nil {
+		if typ.Kind == engine.StructKind {
+			return typ
 		}
-		return e.enumValueName(chain.Struct(), enum, id)
+		typ = typ.Parent
 	}
-	return numeric.String()
+	return nil
 }
 
-func (e *Emitter) typeSwitchStruct(unit *goUnit, attr *kaitai.Attr) {
-	ts := attr.Type.TypeSwitch
-	typeSwitchName := e.localPrefix() + e.typeSwitchName(ts.FieldName)
+func (e *Emitter) parentEnum(val *engine.ExprValue) *kaitai.Enum {
+	typ := val.Type
+	for typ != nil {
+		if typ.Kind == engine.EnumKind {
+			return typ.Enum
+		}
+		typ = typ.Parent
+	}
+	return nil
+}
+
+func (e *Emitter) typeSwitchCaseValue(value string) string {
+	ex := expr.MustParseExpr(value)
+	val := engine.ResultTypeOfExpr(e.context, ex).Value()
+	if val == nil {
+		panic(fmt.Errorf("unresolved: %s", value))
+	}
+	if val.Type != nil && val.Type.Parent != nil && val.Type.Parent.Kind == engine.EnumValueKind {
+		return e.enumValueName(e.parentStruct(val), e.parentEnum(val), val.Type.Parent.EnumValue.ID)
+	} else {
+		return e.expr(ex)
+	}
+}
+
+func (e *Emitter) typeSwitchStruct(unit *goUnit, typ *engine.ExprType) {
+	ts := typ.Attr.Type.TypeSwitch
+	typeSwitchName := e.prefix(typ.Parent) + e.typeSwitchName(ts.FieldName)
 	unit.interfaces = append(unit.interfaces, goInterface{
 		name: typeSwitchName,
 		methods: goMethods{
@@ -588,10 +677,10 @@ func (e *Emitter) typeSwitchStruct(unit *goUnit, attr *kaitai.Attr) {
 			},
 		},
 	})
-	for value, typ := range ts.Cases {
-		goUnderlyingType := e.declType(kaitai.Type{TypeRef: &typ}, nil)
+	for value, caseType := range ts.Cases {
+		goUnderlyingType := e.declTypeRef(&caseType, nil)
 		goValue := e.typeSwitchCaseValue(value)
-		caseStruct := e.typeSwitchCaseTypeName(attr, goValue)
+		caseStruct := e.typeSwitchCaseTypeName(typ, goValue)
 		unit.structs = append(unit.structs, goStruct{
 			name: caseStruct,
 			fields: []goVar{
@@ -610,12 +699,13 @@ func (e *Emitter) typeSwitchStruct(unit *goUnit, attr *kaitai.Attr) {
 	}
 }
 
-func (e *Emitter) typeSwitch(unit *goUnit, attr *kaitai.Attr, forceEndian kaitai.EndianKind) {
+func (e *Emitter) typeSwitch(unit *goUnit, val *engine.ExprValue, forceEndian types.EndianKind) {
+	attr := val.Type.Attr
 	oldEndian := e.endian
 	endianSuffix := ""
-	if forceEndian != kaitai.UnspecifiedOrder {
+	if forceEndian != types.UnspecifiedOrder {
 		e.endian = forceEndian
-		if forceEndian == kaitai.LittleEndian {
+		if forceEndian == types.LittleEndian {
 			endianSuffix = "LE"
 		} else {
 			endianSuffix = "BE"
@@ -626,38 +716,32 @@ func (e *Emitter) typeSwitch(unit *goUnit, attr *kaitai.Attr, forceEndian kaitai
 	}()
 
 	ts := attr.Type.TypeSwitch
-	typeSwitchName := e.localPrefix() + e.typeSwitchName(ts.FieldName)
+	typeSwitchName := e.prefix(val.Parent.Type) + e.typeSwitchName(ts.FieldName)
 	readFn := goFunc{
-		recv: goVar{name: "this", typ: "*" + e.parentPrefix() + e.typeName(e.parent().ID)},
+		recv: goVar{name: "this", typ: "*" + e.prefix(val.Type.Parent.Parent) + e.typeName(val.Type.Parent.Struct.Type.ID)},
 		name: "read" + typeSwitchName + endianSuffix,
 		in:   []goVar{{name: "io", typ: "*" + kaitaiStream}},
 		out:  []goVar{{name: "err", typ: "error"}},
 	}
 	readFn.printf("switch %s {", e.expr(ts.SwitchOn))
 	for value, typ := range ts.Cases {
-		declTyp, ok := ts.SwitchOn.Type(e.parent())
-		typeCast := ""
-		if ok {
-			typeCast = e.declType(declTyp, nil)
-		}
+		switchOnType := engine.ResultTypeOfExpr(e.context, ts.SwitchOn)
+		typeCast := e.declType(switchOnType.Value().Type)
 		goValue := e.typeSwitchCaseValue(value)
-		goUnderlyingType := e.declType(kaitai.Type{TypeRef: &typ}, nil)
-		caseStruct := e.typeSwitchCaseTypeName(attr, goValue)
+		goUnderlyingType := e.declTypeRef(&typ, nil)
+		caseStruct := e.typeSwitchCaseTypeName(val.Type, goValue)
 		fieldName := e.fieldName(attr.ID)
 
 		switch typ.Kind {
-		case kaitai.User:
+		case types.User:
 			readFn.tmp++
-			var chain kaitai.StructChain
-			if len(typ.User.Params) > 0 {
-				chain = e.resolveLocalStruct(typ.User.Name)
-				if chain == nil {
-					panic(fmt.Errorf("unresolved type: %s", typ.User.Name))
-				}
+			resolved := e.resolveType(typ.User.Name)
+			if resolved.Kind != engine.StructKind {
+				panic(fmt.Errorf("expression %q yielded unexpected type %s (expected struct)", typ.User.Name, resolved.Kind))
 			}
 			readFn.printf("case %s(%s):", typeCast, goValue).indent()
 			readFn.printf("tmp%d := %s{}", readFn.tmp, goUnderlyingType)
-			e.setParams(fmt.Sprintf("tmp%d", readFn.tmp), typ.User, chain.Struct(), &readFn)
+			e.setParams(fmt.Sprintf("tmp%d", readFn.tmp), typ.User, resolved.Struct.Type, &readFn)
 			readFn.printf("if err := tmp%d.Read(io); err != nil {", readFn.tmp).indent()
 			readFn.printf("return err")
 			readFn.unindent().printf("}")
@@ -684,24 +768,23 @@ func (e *Emitter) typeSwitch(unit *goUnit, attr *kaitai.Attr, forceEndian kaitai
 	unit.methods = append(unit.methods, readFn)
 }
 
-func (e *Emitter) prefix(parent *kaitai.Struct) string {
-	if parent == nil || parent.ID == "" {
+func (e *Emitter) prefix(typ *engine.ExprType) string {
+	if typ == nil || typ.Struct == nil {
 		return ""
 	}
-	return e.typeName(parent.ID) + "_"
+	return e.typeName(typ.Struct.Type.ID) + "_"
 }
 
-func (e *Emitter) localPrefix() string {
-	return e.prefix(e.parent())
-}
-
-func (e *Emitter) parentPrefix() string {
-	return e.prefix(e.grandparent())
+func (e *Emitter) prefixVal(val *engine.ExprValue) string {
+	if val == nil || val.Type == nil {
+		return ""
+	}
+	return e.prefix(val.Type)
 }
 
 // Determines if endian switching may be necessary for a type.
 func (e *Emitter) needMultipleEndian(s *kaitai.Struct) bool {
-	if s.Meta.Endian.Kind == kaitai.LittleEndian || s.Meta.Endian.Kind == kaitai.BigEndian {
+	if s.Meta.Endian.Kind == types.LittleEndian || s.Meta.Endian.Kind == types.BigEndian {
 		return false
 	}
 	for _, attr := range s.Seq {
@@ -712,12 +795,12 @@ func (e *Emitter) needMultipleEndian(s *kaitai.Struct) bool {
 	return false
 }
 
-func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, s *kaitai.Struct, forceEndian kaitai.EndianKind) {
+func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, val *engine.ExprValue, forceEndian types.EndianKind) {
 	oldEndian := e.endian
 	endianSuffix := ""
-	if forceEndian != kaitai.UnspecifiedOrder {
+	if forceEndian != types.UnspecifiedOrder {
 		e.endian = forceEndian
-		if forceEndian == kaitai.LittleEndian {
+		if forceEndian == types.LittleEndian {
 			endianSuffix = "LE"
 		} else {
 			endianSuffix = "BE"
@@ -735,8 +818,8 @@ func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, s *kaitai.Struct, forceE
 		out:  []goVar{{name: "err", typ: "error"}},
 	}
 	errExit := false
-	for _, attr := range s.Seq {
-		if !e.readAttr(unit, &readMethod, attr, forceEndian) {
+	for _, attr := range val.Struct.Attrs {
+		if !e.readAttr(unit, &readMethod, attr.Type, forceEndian) {
 			// We may need to end the function early in some cases.
 			errExit = true
 			break
@@ -779,7 +862,7 @@ func (e *Emitter) endianSwitch(unit *goUnit, gs *goStruct, ks *kaitai.Struct) {
 	fn.printf("switch %s {", e.expr(ks.Meta.Endian.SwitchOn))
 	for value, endian := range ks.Meta.Endian.Cases {
 		fn.printf("case %s:", e.typeSwitchCaseValue(value))
-		if endian == kaitai.LittleEndian {
+		if endian == types.LittleEndian {
 			fn.printf("\treturn this.ReadLE(io)")
 		} else {
 			fn.printf("\treturn this.ReadBE(io)")
@@ -792,7 +875,9 @@ func (e *Emitter) endianSwitch(unit *goUnit, gs *goStruct, ks *kaitai.Struct) {
 	unit.methods = append(unit.methods, fn)
 }
 
-func (e *Emitter) struc(inputname string, unit *goUnit, ks *kaitai.Struct) {
+func (e *Emitter) struc(inputname string, unit *goUnit, val *engine.ExprValue) {
+	ks := val.Type.Struct.Type
+
 	defer func() {
 		if r := recover(); r != nil {
 			panic(fmt.Errorf("struct %s: %s", ks.ID, r))
@@ -800,12 +885,27 @@ func (e *Emitter) struc(inputname string, unit *goUnit, ks *kaitai.Struct) {
 	}()
 
 	name := e.typeName(ks.ID)
-	prefix := e.localPrefix()
+	prefix := e.prefix(val.Type.Parent)
 
 	gs := goStruct{name: prefix + name}
 
-	e.push(ks)
+	e.push(val)
 	defer e.pop()
+
+	// Handle imports before anything else...
+	for _, n := range ks.Meta.Imports {
+		e.root(e.resolver(inputname, n))
+	}
+
+	// Then handle nested structures
+	for _, n := range val.Type.Struct.Structs {
+		e.struc(inputname, unit, engine.NewStructValueSymbol(n, val))
+	}
+
+	// Enumerations
+	for _, n := range val.Type.Struct.Enums {
+		e.enum(unit, n)
+	}
 
 	// Parameter fields
 	for _, param := range ks.Params {
@@ -816,59 +916,42 @@ func (e *Emitter) struc(inputname string, unit *goUnit, ks *kaitai.Struct) {
 	}
 
 	// Attribute fields
-	for _, attr := range ks.Seq {
+	for _, attr := range val.Struct.Attrs {
 		gs.fields = append(gs.fields, goVar{
-			name: e.fieldName(attr.ID),
-			typ:  e.declType(attr.Type, attr.Repeat),
+			name: e.fieldName(attr.Type.Attr.ID),
+			typ:  e.declType(attr.Type),
 		})
 	}
 
 	unit.structs = append(unit.structs, gs)
 
-	// Handle imports before anything else...
-	for _, n := range ks.Meta.Imports {
-		inputname, s := e.resolver(inputname, n)
-		e.imports.Structs = append(e.imports.Structs, s)
-		e.root(inputname, s)
-	}
-
-	// Then handle nested structures
-	for _, n := range ks.Structs {
-		e.struc(inputname, unit, n)
-	}
-
-	// Enumerations
-	for _, n := range ks.Enums {
-		e.enum(unit, n)
-	}
-
 	// Deserialization
-	if e.endian == kaitai.SwitchEndian || (e.needMultipleEndian(ks) && e.endian == kaitai.UnspecifiedOrder) {
-		if e.endian == kaitai.SwitchEndian {
+	if e.endian == types.SwitchEndian || (e.needMultipleEndian(ks) && e.endian == types.UnspecifiedOrder) {
+		if e.endian == types.SwitchEndian {
 			e.endianSwitch(unit, &gs, ks)
 		} else {
 			// Generate unspecified endian even if it does always return an error.
-			e.strucRead(unit, &gs, ks, kaitai.UnspecifiedOrder)
+			e.strucRead(unit, &gs, val, types.UnspecifiedOrder)
 		}
-		e.strucRead(unit, &gs, ks, kaitai.LittleEndian)
-		e.strucRead(unit, &gs, ks, kaitai.BigEndian)
+		e.strucRead(unit, &gs, val, types.LittleEndian)
+		e.strucRead(unit, &gs, val, types.BigEndian)
 
-		for _, attr := range ks.Seq {
-			if attr.Type.TypeSwitch != nil {
-				e.typeSwitchStruct(unit, attr)
-				e.typeSwitch(unit, attr, kaitai.LittleEndian)
-				e.typeSwitch(unit, attr, kaitai.BigEndian)
+		for _, attr := range val.Struct.Attrs {
+			if attr.Type.Attr.Type.TypeSwitch != nil {
+				e.typeSwitchStruct(unit, attr.Type)
+				e.typeSwitch(unit, attr, types.LittleEndian)
+				e.typeSwitch(unit, attr, types.BigEndian)
 			}
 		}
 	} else {
 		// Struct is always consistent endianness: generate one read function and make two stubs to it.
-		e.strucRead(unit, &gs, ks, kaitai.UnspecifiedOrder)
+		e.strucRead(unit, &gs, val, types.UnspecifiedOrder)
 		e.endianStubs(unit, &gs, ks)
 
-		for _, attr := range ks.Seq {
-			if attr.Type.TypeSwitch != nil {
-				e.typeSwitchStruct(unit, attr)
-				e.typeSwitch(unit, attr, kaitai.UnspecifiedOrder)
+		for _, attr := range val.Struct.Attrs {
+			if attr.Type.Attr.Type.TypeSwitch != nil {
+				e.typeSwitchStruct(unit, attr.Type)
+				e.typeSwitch(unit, attr, types.UnspecifiedOrder)
 			}
 		}
 	}

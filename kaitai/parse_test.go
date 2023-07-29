@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/jchv/zanbato/kaitai/expr"
+	"github.com/jchv/zanbato/kaitai/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -47,7 +49,7 @@ func TestParse(t *testing.T) {
 			Struct: &Struct{
 				ID: "attrs",
 				Seq: []*Attr{
-					{ID: "magic", Type: Type{TypeRef: &TypeRef{Kind: Bytes, Bytes: &BytesType{Consume: true, EosError: true, Size: &Expr{IntNode{*big.NewInt(4)}}}}}, Contents: []byte{0x7f, 'E', 'L', 'F'}},
+					{ID: "magic", Type: types.Type{TypeRef: &types.TypeRef{Kind: types.Bytes, Bytes: &types.BytesType{Consume: true, EosError: true, Size: &expr.Expr{expr.IntNode{big.NewInt(4)}}}}}, Contents: []byte{0x7f, 'E', 'L', 'F'}},
 				},
 			},
 		},

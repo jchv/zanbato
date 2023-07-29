@@ -1,4 +1,4 @@
-package kaitai
+package types
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/jchv/zanbato/kaitai/expr"
 	"github.com/jchv/zanbato/kaitai/ksy"
 )
 
@@ -51,9 +52,117 @@ const (
 	UntypedBool
 )
 
+// Calculates type promotion rules for k against k2. Note that if k2 is less
+// than k, this will return k: it only ever returns a greater or equal value
+// to k.
+func (k Kind) Promote(k2 Kind) Kind {
+	// Promote untyped int to untyped float.
+	if k == UntypedInt && k2 == UntypedFloat {
+		return UntypedFloat
+	}
+
+	// If k2 is signed, or floating point...
+	if (k >= U1 && k <= U8be) && ((k2 >= S1 && k2 <= S8be) || (k2 >= F4 && k2 <= F8be) || k2 == UntypedInt || k2 == UntypedFloat) {
+		// Promote k to be signed.
+		k += S1 - U1
+	}
+
+	// For the unsigned cases, we only need to care about promoting to *other*
+	// unsigned types, since we promoted the value to signed if the other
+	// operand was not unsigned.
+
+	// Promotion tables
+	switch k {
+	case U1:
+		switch k2 {
+		case U2, U2le, U2be:
+			return U2
+		case U4, U4le, U4be:
+			return U4
+		case U8, U8le, U8be:
+			return U8
+		}
+	case U2, U2le, U2be:
+		switch k2 {
+		case U4, U4le, U4be:
+			return k + (U4 - U2)
+		case U8, U8le, U8be:
+			return k + (U8 - U2)
+		}
+	case U4, U4le, U4be:
+		switch k2 {
+		case U8, U8le, U8be:
+			return k + (U8 - U4)
+		}
+	case S1:
+		switch k2 {
+		case S2, S2le, S2be:
+			return S2
+		case S4, S4le, S4be:
+			return S4
+		case S8, S8le, S8be:
+			return S8
+		case F4, F4le, F4be:
+			return F4
+		case F8, F8le, F8be:
+			return F8
+		case UntypedInt:
+			return UntypedInt
+		case UntypedFloat:
+			return UntypedFloat
+		}
+	case S2, S2le, S2be:
+		switch k2 {
+		case S4, S4le, S4be:
+			return k + (S4 - S2)
+		case S8, S8le, S8be:
+			return k + (S8 - S2)
+		case F4, F4le, F4be:
+			return k + (F4 - S2)
+		case F8, F8le, F8be:
+			return k + (F8 - S2)
+		case UntypedInt:
+			return UntypedInt
+		case UntypedFloat:
+			return UntypedFloat
+		}
+	case S4, S4le, S4be:
+		switch k2 {
+		case S8, S8le, S8be:
+			return k + (S8 - S4)
+		case F4, F4le, F4be:
+			return k + (F4 - S4)
+		case F8, F8le, F8be:
+			return k + (F8 - S4)
+		case UntypedInt:
+			return UntypedInt
+		case UntypedFloat:
+			return UntypedFloat
+		}
+	case S8, S8le, S8be:
+		switch k2 {
+		case F4, F4le, F4be:
+			return k + (F4 - S8)
+		case F8, F8le, F8be:
+			return k + (F8 - S8)
+		case UntypedInt:
+			return UntypedInt
+		case UntypedFloat:
+			return UntypedFloat
+		}
+	case F4, F4le, F4be:
+		switch k2 {
+		case F8, F8le, F8be:
+			return k + (F8 - F4)
+		}
+	}
+
+	return k
+}
+
 // BytesType contains data for bytes types.
 type BytesType struct {
-	Size       *Expr
+	Size       *expr.Expr
 	SizeEOS    bool
 	Terminator int
 	Consume    bool
@@ -63,7 +172,7 @@ type BytesType struct {
 
 // StringType contains data for string types.
 type StringType struct {
-	Size       *Expr
+	Size       *expr.Expr
 	SizeEOS    bool
 	Encoding   string
 	Terminator int
@@ -75,13 +184,13 @@ type StringType struct {
 // UserType contains data for user types.
 type UserType struct {
 	Name   string
-	Params []*Expr
+	Params []*expr.Expr
 }
 
 // TypeSwitch contains a set of possible types.
 type TypeSwitch struct {
 	FieldName Identifier // Name of the field; this is for identity purposes.
-	SwitchOn  *Expr
+	SwitchOn  *expr.Expr
 	Cases     map[string]TypeRef
 }
 
@@ -205,7 +314,7 @@ func ParseAttrType(attr ksy.AttributeSpec) (Type, error) {
 	}
 
 	if attr.Type.SwitchOn != "" {
-		switchOn, err := ParseExpr(attr.Type.SwitchOn)
+		switchOn, err := expr.ParseExpr(attr.Type.SwitchOn)
 		if err != nil {
 			return Type{}, fmt.Errorf("parsing attr switch-on statement: %w", err)
 		}
@@ -236,7 +345,7 @@ func ParseAttrType(attr ksy.AttributeSpec) (Type, error) {
 		}
 
 		if attr.Size != "" {
-			sizeExpr, err := ParseExpr(attr.Size)
+			sizeExpr, err := expr.ParseExpr(attr.Size)
 			if err != nil {
 				return Type{}, err
 			}
@@ -253,9 +362,9 @@ func ParseAttrType(attr ksy.AttributeSpec) (Type, error) {
 		if attr.Contents != nil {
 			switch typ.Kind {
 			case Bytes:
-				typ.Bytes.Size = &Expr{Root: IntNode{Value: *big.NewInt(int64(len(attr.Contents)))}}
+				typ.Bytes.Size = &expr.Expr{Root: expr.IntNode{Integer: big.NewInt(int64(len(attr.Contents)))}}
 			case String:
-				typ.String.Size = &Expr{Root: IntNode{Value: *big.NewInt(int64(len(attr.Contents)))}}
+				typ.String.Size = &expr.Expr{Root: expr.IntNode{Integer: big.NewInt(int64(len(attr.Contents)))}}
 			default:
 				return Type{}, fmt.Errorf("contents on type %s not supported", typ.Kind)
 			}
@@ -342,7 +451,7 @@ func parseUserType(typestr string) (TypeRef, error) {
 		result.Name = typestr[:i]
 		params := strings.Split(typestr[i+1:j], ",")
 		for i, src := range params {
-			param, err := ParseExpr(src)
+			param, err := expr.ParseExpr(src)
 			if err != nil {
 				return TypeRef{}, fmt.Errorf("in parameter %d of %s: %w", i+1, result.Name, err)
 			}

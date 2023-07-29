@@ -1,20 +1,25 @@
 package kaitai
 
+import (
+	"github.com/jchv/zanbato/kaitai/expr"
+	"github.com/jchv/zanbato/kaitai/types"
+)
+
 // Attr represents an attr inside of a Kaitai type.
 type Attr struct {
 	ID       Identifier
 	Doc      string
 	Contents []byte
-	Type     Type
-	Repeat   RepeatType
-	Process  *Expr
-	If       *Expr
+	Type     types.Type
+	Repeat   types.RepeatType
+	Process  *expr.Expr
+	If       *expr.Expr
 
 	// Integers
 	Enum string
 
 	// Instances
-	Pos   *Expr `yaml:"pos"`
-	IO    *Expr `yaml:"io"`
-	Value *Expr `yaml:"value"`
+	Pos   *expr.Expr `yaml:"pos"`
+	IO    *expr.Expr `yaml:"io"`
+	Value *expr.Expr `yaml:"value"`
 }

@@ -1,6 +1,9 @@
-package kaitai
+package types
 
-import "github.com/jchv/zanbato/kaitai/ksy"
+import (
+	"github.com/jchv/zanbato/kaitai/expr"
+	"github.com/jchv/zanbato/kaitai/ksy"
+)
 
 // Assert that the different repeat types implement RepeatType.
 var (
@@ -17,12 +20,12 @@ type RepeatEOS struct{}
 
 // RepeatExpr evaluates an expression and uses it as a count.
 type RepeatExpr struct {
-	CountExpr *Expr
+	CountExpr *expr.Expr
 }
 
 // RepeatUntil repeatedly reads until an expression evaluates to true.
 type RepeatUntil struct {
-	UntilExpr *Expr
+	UntilExpr *expr.Expr
 }
 
 func (RepeatEOS) isRepeatType()   {}
@@ -35,9 +38,9 @@ func ParseRepeat(spec ksy.AttributeSpec) RepeatType {
 	case ksy.EosRepeatSpec:
 		return RepeatEOS{}
 	case ksy.ExprRepeatSpec:
-		return RepeatExpr{MustParseExpr(spec.RepeatExpr)}
+		return RepeatExpr{expr.MustParseExpr(spec.RepeatExpr)}
 	case ksy.UntilRepeatSpec:
-		return RepeatUntil{MustParseExpr(spec.RepeatUntil)}
+		return RepeatUntil{expr.MustParseExpr(spec.RepeatUntil)}
 	case "":
 		return nil
 	default:

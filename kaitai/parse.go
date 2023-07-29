@@ -5,7 +5,9 @@ import (
 	"io"
 	"math/big"
 
+	"github.com/jchv/zanbato/kaitai/expr"
 	"github.com/jchv/zanbato/kaitai/ksy"
+	"github.com/jchv/zanbato/kaitai/types"
 
 	"gopkg.in/yaml.v3"
 )
@@ -31,22 +33,22 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 	result.Meta.Imports = typ.Meta.Imports
 
 	if typ.Meta.Endian.Value == "le" {
-		result.Meta.Endian.Kind = LittleEndian
+		result.Meta.Endian.Kind = types.LittleEndian
 	} else if typ.Meta.Endian.Value == "be" {
-		result.Meta.Endian.Kind = BigEndian
+		result.Meta.Endian.Kind = types.BigEndian
 	} else if len(typ.Meta.Endian.Cases) > 0 || typ.Meta.Endian.SwitchOn != "" {
-		switchOn, err := ParseExpr(typ.Meta.Endian.SwitchOn)
+		switchOn, err := expr.ParseExpr(typ.Meta.Endian.SwitchOn)
 		if err != nil {
 			return nil, err
 		}
-		result.Meta.Endian.Kind = SwitchEndian
+		result.Meta.Endian.Kind = types.SwitchEndian
 		result.Meta.Endian.SwitchOn = switchOn
-		result.Meta.Endian.Cases = make(map[string]EndianKind)
+		result.Meta.Endian.Cases = make(map[string]types.EndianKind)
 		for key, value := range typ.Meta.Endian.Cases {
 			if value == "le" {
-				result.Meta.Endian.Cases[key] = LittleEndian
+				result.Meta.Endian.Cases[key] = types.LittleEndian
 			} else if value == "be" {
-				result.Meta.Endian.Cases[key] = BigEndian
+				result.Meta.Endian.Cases[key] = types.BigEndian
 			} else {
 				return nil, fmt.Errorf("unknown endian value %s", value)
 			}
@@ -92,7 +94,7 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 }
 
 func translateParamSpec(param ksy.ParamSpec) (*Param, error) {
-	typ, err := ParseTypeRef(param.Type)
+	typ, err := types.ParseTypeRef(param.Type)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +107,7 @@ func translateParamSpec(param ksy.ParamSpec) (*Param, error) {
 }
 
 func translateAttrSpec(attr ksy.AttributeSpec) (*Attr, error) {
-	typ, err := ParseAttrType(attr)
+	typ, err := types.ParseAttrType(attr)
 	if err != nil {
 		return nil, err
 	}
@@ -114,13 +116,13 @@ func translateAttrSpec(attr ksy.AttributeSpec) (*Attr, error) {
 		Doc:      attr.Doc,
 		Contents: attr.Contents,
 		Type:     typ,
-		Repeat:   ParseRepeat(attr),
-		Process:  MustParseExpr(attr.Process),
-		If:       MustParseExpr(attr.If),
+		Repeat:   types.ParseRepeat(attr),
+		Process:  expr.MustParseExpr(attr.Process),
+		If:       expr.MustParseExpr(attr.If),
 		Enum:     attr.Enum,
-		Pos:      MustParseExpr(attr.Pos),
-		IO:       MustParseExpr(attr.IO),
-		Value:    MustParseExpr(attr.Value),
+		Pos:      expr.MustParseExpr(attr.Pos),
+		IO:       expr.MustParseExpr(attr.IO),
+		Value:    expr.MustParseExpr(attr.Value),
 	}, nil
 }
 
@@ -136,7 +138,7 @@ func translateEnumSpec(id Identifier, typ ksy.EnumSpec) (*Enum, error) {
 }
 
 func translateInstanceSpec(spec ksy.InstanceSpecItem) (*Attr, error) {
-	typ, err := ParseAttrType(ksy.AttributeSpec(spec.Value))
+	typ, err := types.ParseAttrType(ksy.AttributeSpec(spec.Value))
 	if err != nil {
 		return nil, err
 	}
@@ -145,12 +147,12 @@ func translateInstanceSpec(spec ksy.InstanceSpecItem) (*Attr, error) {
 		Doc:      spec.Value.Doc,
 		Contents: spec.Value.Contents,
 		Type:     typ,
-		Repeat:   ParseRepeat(ksy.AttributeSpec(spec.Value)),
-		Process:  MustParseExpr(spec.Value.Process),
-		If:       MustParseExpr(spec.Value.If),
+		Repeat:   types.ParseRepeat(ksy.AttributeSpec(spec.Value)),
+		Process:  expr.MustParseExpr(spec.Value.Process),
+		If:       expr.MustParseExpr(spec.Value.If),
 		Enum:     spec.Value.Enum,
-		Pos:      MustParseExpr(spec.Value.Pos),
-		IO:       MustParseExpr(spec.Value.IO),
-		Value:    MustParseExpr(spec.Value.Value),
+		Pos:      expr.MustParseExpr(spec.Value.Pos),
+		IO:       expr.MustParseExpr(spec.Value.IO),
+		Value:    expr.MustParseExpr(spec.Value.Value),
 	}, nil
 }

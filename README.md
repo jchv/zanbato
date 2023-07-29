@@ -13,9 +13,10 @@ Here are some of the features that do work:
 - Structures
   + ✅ Basic data types (integers, strings, bytes, etc.)
   + ✅ Type switches
+    - ⚠️ **Only switching on enumerations is supported for now.**
   + ✅ Endianness
     - ✅ Inheriting endianness
-    - ⚠️ **NOTE: Endian switching is not supported.**
+    - ✅ Endian switching
   + ✅ Referring to other types
   + ✅ Repeating:
     - ✅ Repeat count of iterations
@@ -24,6 +25,9 @@ Here are some of the features that do work:
 - ✅ Enumerations
 - ✅ Parameters
 - ✅ Expressions
-  + ⚠️ **Only basic literals and limited field access.** The groundwork for parsing expressions is present but unfinished.
+  + ✅ All unary and binary operators
+  + ⚠️ **Limited support for field access.** Navigating structs is currently unsupported.
   + ⚠️ **In addition, special variables are not implemented.**
+  + ⚠️ **Ternary operator is not supported yet.**
+  + ⚠️ **Operator precedence may differ from Kaitai Struct.** The operator precedence of Kaitai Struct expressions is not specified yet.
 - ⚠️ **Instances are not implemented.**

@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/jchv/zanbato/kaitai"
+	"github.com/jchv/zanbato/kaitai/expr"
+	"github.com/jchv/zanbato/kaitai/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,8 +20,8 @@ func Test(t *testing.T) {
 			Struct: &kaitai.Struct{
 				ID: "attrs",
 				Seq: []*kaitai.Attr{
-					{ID: "magic", Type: kaitai.Type{TypeRef: &kaitai.TypeRef{Kind: kaitai.Bytes, Bytes: &kaitai.BytesType{Size: kaitai.MustParseExpr("4")}}}, Contents: []byte{0x7f, 'E', 'L', 'F'}},
-					{ID: "count", Type: kaitai.Type{TypeRef: &kaitai.TypeRef{Kind: kaitai.S8le}}},
+					{ID: "magic", Type: types.Type{TypeRef: &types.TypeRef{Kind: types.Bytes, Bytes: &types.BytesType{Size: expr.MustParseExpr("4")}}}, Contents: []byte{0x7f, 'E', 'L', 'F'}},
+					{ID: "count", Type: types.Type{TypeRef: &types.TypeRef{Kind: types.S8le}}},
 					// TODO: implement repeated fields.
 					// {ID: "entries", Type: kaitai.Type{Kind: kaitai.S2le}, Repeat: kaitai.RepeatExpr{CountExpr: kaitai.MustParseExpr("count")}},
 				},
