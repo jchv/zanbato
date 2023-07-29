@@ -19,7 +19,8 @@ type Attr struct {
 	Enum string
 
 	// Instances
-	Pos   *expr.Expr `yaml:"pos"`
-	IO    *expr.Expr `yaml:"io"`
-	Value *expr.Expr `yaml:"value"`
+	Pos   *expr.Expr
+	Size  *expr.Expr
+	IO    *expr.Expr
+	Value *expr.Expr
 }

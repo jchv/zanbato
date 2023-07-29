@@ -308,7 +308,7 @@ func (t Type) HasDependentEndian() bool {
 type Identifier string
 
 // ParseAttrType parses a type from an attr.
-func ParseAttrType(attr ksy.AttributeSpec) (Type, error) {
+func ParseAttrType(attr ksy.AttributeSpec, instance bool) (Type, error) {
 	if attr.Type.Value != "" && attr.Type.SwitchOn != "" {
 		return Type{}, errors.New("attr specifies both typeref and switch type")
 	}
@@ -344,7 +344,7 @@ func ParseAttrType(attr ksy.AttributeSpec) (Type, error) {
 			return Type{}, err
 		}
 
-		if attr.Size != "" {
+		if attr.Size != "" && !instance {
 			sizeExpr, err := expr.ParseExpr(attr.Size)
 			if err != nil {
 				return Type{}, err

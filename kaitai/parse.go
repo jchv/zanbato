@@ -107,7 +107,7 @@ func translateParamSpec(param ksy.ParamSpec) (*Param, error) {
 }
 
 func translateAttrSpec(attr ksy.AttributeSpec) (*Attr, error) {
-	typ, err := types.ParseAttrType(attr)
+	typ, err := types.ParseAttrType(attr, false)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func translateEnumSpec(id Identifier, typ ksy.EnumSpec) (*Enum, error) {
 }
 
 func translateInstanceSpec(spec ksy.InstanceSpecItem) (*Attr, error) {
-	typ, err := types.ParseAttrType(ksy.AttributeSpec(spec.Value))
+	typ, err := types.ParseAttrType(ksy.AttributeSpec(spec.Value), true)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +152,7 @@ func translateInstanceSpec(spec ksy.InstanceSpecItem) (*Attr, error) {
 		If:       expr.MustParseExpr(spec.Value.If),
 		Enum:     spec.Value.Enum,
 		Pos:      expr.MustParseExpr(spec.Value.Pos),
+		Size:     expr.MustParseExpr(spec.Value.Size),
 		IO:       expr.MustParseExpr(spec.Value.IO),
 		Value:    expr.MustParseExpr(spec.Value.Value),
 	}, nil
