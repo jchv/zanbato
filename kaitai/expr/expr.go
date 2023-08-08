@@ -84,6 +84,19 @@ func (FloatNode) isnode() {}
 
 func (f FloatNode) String() string { return f.Float.String() }
 
+// BoolNode is a boolean literal.
+type BoolNode struct{ Bool bool }
+
+func (BoolNode) isnode() {}
+
+func (b BoolNode) String() string {
+	if b.Bool {
+		return "true"
+	} else {
+		return "false"
+	}
+}
+
 // UnaryNode is a unary operation
 type UnaryNode struct {
 	Operand Node
@@ -188,11 +201,16 @@ func (m MemberNode) String() string {
 }
 
 // ParseExpr parses an expression into an AST.
-func ParseExpr(src string) (*Expr, error) {
+func ParseExpr(src string) (result *Expr, err error) {
+	p := parser{[]rune(src), 0}
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("error parsing expression at character %d: %s", p.pos+1, r)
+		}
+	}()
 	if src == "" {
 		return nil, nil
 	}
-	p := parser{[]rune(src)}
 	return &Expr{Root: p.expr(0)}, nil
 }
 
@@ -218,7 +236,8 @@ func isident(c rune) bool       { return isidentstart(c) || isdigit(c) }
 func iswhitespace(c rune) bool  { return c == ' ' || c == '\t' }
 
 type parser struct {
-	s []rune
+	s   []rune
+	pos int
 }
 
 func (p *parser) peek() rune {
@@ -235,10 +254,15 @@ func (p *parser) peek2() rune {
 	return 0
 }
 
+func (p *parser) advance(n int) {
+	p.s = p.s[n:]
+	p.pos += n
+}
+
 func (p *parser) next() rune {
 	if len(p.s) != 0 {
 		v := p.s[0]
-		p.s = p.s[1:]
+		p.advance(1)
 		return v
 	}
 	return 0
@@ -246,7 +270,7 @@ func (p *parser) next() rune {
 
 func (p *parser) skipwhitespace() {
 	for iswhitespace(p.peek()) {
-		p.s = p.s[1:]
+		p.advance(1)
 	}
 }
 
@@ -254,14 +278,14 @@ func (p *parser) token(test func(rune) bool) string {
 	var token string
 	for len(p.s) != 0 && test(p.s[0]) {
 		token += string(p.s[0])
-		p.s = p.s[1:]
+		p.advance(1)
 	}
 	return token
 }
 
 func (p *parser) strescape(quote rune) []byte {
 	c := p.s[0]
-	p.s = p.s[1:]
+	p.advance(1)
 	switch c {
 	case 'a':
 		return []byte{'\a'}
@@ -283,7 +307,7 @@ func (p *parser) strescape(quote rune) []byte {
 		return []byte(string(quote))
 	case '0', '1', '2', '3', '4', '5', '6', '7':
 		octal := string(c) + string(p.s[0]) + string(p.s[1])
-		p.s = p.s[2:]
+		p.advance(2)
 		code, err := strconv.ParseUint(octal, 8, 8)
 		if err != nil {
 			panic(err)
@@ -291,7 +315,7 @@ func (p *parser) strescape(quote rune) []byte {
 		return []byte{byte(code)}
 	case 'x':
 		hex := string(p.s[0]) + string(p.s[1])
-		p.s = p.s[2:]
+		p.advance(2)
 		code, err := strconv.ParseUint(hex, 16, 8)
 		if err != nil {
 			panic(err)
@@ -299,7 +323,7 @@ func (p *parser) strescape(quote rune) []byte {
 		return []byte{byte(code)}
 	case 'u':
 		hex := string(p.s[0]) + string(p.s[1]) + string(p.s[2]) + string(p.s[3])
-		p.s = p.s[4:]
+		p.advance(4)
 		code, err := strconv.ParseUint(hex, 16, 16)
 		if err != nil {
 			panic(err)
@@ -307,7 +331,7 @@ func (p *parser) strescape(quote rune) []byte {
 		return []byte(string(rune(code)))
 	case 'U':
 		hex := string(p.s[0]) + string(p.s[1]) + string(p.s[2]) + string(p.s[3]) + string(p.s[4]) + string(p.s[5]) + string(p.s[6]) + string(p.s[7])
-		p.s = p.s[8:]
+		p.advance(8)
 		code, err := strconv.ParseUint(hex, 16, 32)
 		if err != nil {
 			panic(err)
@@ -339,12 +363,12 @@ func (p *parser) number() Node {
 
 func (p *parser) strlit() Node {
 	quote := p.s[0]
-	p.s = p.s[1:]
+	p.advance(1)
 	str := []byte{}
 
 	for {
 		c := p.s[0]
-		p.s = p.s[1:]
+		p.advance(1)
 		switch c {
 		case quote:
 			return StringNode{string(str)}
@@ -357,7 +381,8 @@ func (p *parser) strlit() Node {
 }
 
 const (
-	depthOrExpr = iota
+	depthTernaryExpr = iota
+	depthOrExpr
 	depthAndExpr
 	depthCompareExpr
 	depthAddExpr
@@ -386,6 +411,10 @@ func (p *parser) expr(depth int) Node {
 		switch tok {
 		case "not":
 			n = UnaryNode{Op: OpLogicalNot, Operand: p.expr(depthPrimaryExpr)}
+		case "true":
+			n = BoolNode{Bool: true}
+		case "false":
+			n = BoolNode{Bool: false}
 		default:
 			n = IdentNode{Identifier: tok}
 		}
@@ -406,16 +435,19 @@ func (p *parser) expr(depth int) Node {
 		p.skipwhitespace()
 		switch p.peek() {
 		case ':':
-			p.next()
-			if p.next() != ':' {
-				panic(fmt.Errorf("unexpected `:`"))
+			// Could be ternary.
+			if p.peek2() != ':' {
+				break
 			}
+			p.advance(2)
 			n = ScopeNode{Operand: n, Type: p.token(isident)}
 			continue
 		case '.':
 			p.next()
 			n = MemberNode{Operand: n, Property: p.token(isident)}
 			continue
+		case 0:
+			return n
 		}
 		if depth >= depthMemberExpr {
 			break
@@ -519,7 +551,7 @@ func (p *parser) expr(depth int) Node {
 		case '&':
 			p.next()
 			if p.next() != '&' {
-				panic(fmt.Errorf("unexpected `&`"))
+				panic(fmt.Errorf("expected `&`"))
 			}
 			n = BinaryNode{Op: OpLogicalAnd, A: n, B: p.expr(depthCompareExpr)}
 			continue
@@ -528,15 +560,29 @@ func (p *parser) expr(depth int) Node {
 			break
 		}
 		switch p.peek() {
-		case '&':
+		case '|':
 			p.next()
 			if p.next() != '|' {
-				panic(fmt.Errorf("unexpected `|`"))
+				panic(fmt.Errorf("expected `|`"))
 			}
 			n = BinaryNode{Op: OpLogicalOr, A: n, B: p.expr(depthAndExpr)}
 			continue
 		}
 		if depth >= depthOrExpr {
+			break
+		}
+		switch p.peek() {
+		case '?':
+			p.next()
+			a := n
+			b := p.expr(0)
+			if p.next() != ':' {
+				panic(fmt.Errorf("expected `:`"))
+			}
+			c := p.expr(0)
+			n = TernaryNode{a, b, c}
+		}
+		if depth >= depthTernaryExpr {
 			break
 		}
 		break

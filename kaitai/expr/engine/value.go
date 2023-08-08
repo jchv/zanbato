@@ -38,6 +38,9 @@ func ResultTypeOfNode(context *Context, node expr.Node) ExprResultType {
 	case expr.IntNode:
 		return ExprResultType{val: NewIntegerLiteralValue(node.Integer)}
 
+	case expr.BoolNode:
+		return ExprResultType{val: NewBooleanLiteralValue(node.Bool)}
+
 	case expr.FloatNode:
 		return ExprResultType{val: NewFloatLiteralValue(node.Float)}
 

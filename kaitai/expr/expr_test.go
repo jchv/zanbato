@@ -37,6 +37,18 @@ func TestParseExpr(t *testing.T) {
 			Source: "1.0",
 			Expr:   &Expr{Root: FloatNode{Float: MustParseBigFloat("1.0")}},
 		},
+		{
+			Source: "1 == 1 ? 2 : 3",
+			Expr: &Expr{Root: TernaryNode{
+				A: BinaryNode{
+					Op: OpEqual,
+					A:  IntNode{Integer: big.NewInt(1)},
+					B:  IntNode{Integer: big.NewInt(1)},
+				},
+				B: IntNode{Integer: big.NewInt(2)},
+				C: IntNode{Integer: big.NewInt(3)},
+			}},
+		},
 	}
 
 	for _, test := range tests {

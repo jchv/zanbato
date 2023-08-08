@@ -283,6 +283,10 @@ func (e *Emitter) calcPromotionNode(a expr.Node, b expr.Node) string {
 	return e.calcPromotionExprValue(av, bv)
 }
 
+func (e *Emitter) exprPromotionTernaryNode(n expr.TernaryNode) string {
+	return e.calcPromotionNode(n.B, n.C)
+}
+
 func (e *Emitter) exprPromotionBinaryNode(n expr.BinaryNode) string {
 	switch n.Op {
 	case expr.OpAdd, expr.OpSub, expr.OpMult, expr.OpDiv, expr.OpMod,
@@ -299,45 +303,56 @@ func (e *Emitter) exprPromotionBinaryNode(n expr.BinaryNode) string {
 	}
 }
 
+func (e *Emitter) exprTernaryNode(t expr.TernaryNode) string {
+	cast := e.exprPromotionTernaryNode(t)
+	// Go does not have a conditional expression. You could emulate it using a
+	// generic helper method, but then the sub-expressions would be evaluated
+	// eagerly. However, Go DOES have a function expression that can be called
+	// inline, and it will implicitly capture any locals. So, we can use this
+	// to use any statement inside of an expression.
+	return fmt.Sprintf("(func() (%s) { if (%s) { return (%s)(%s) } else { return (%s)(%s) } }())",
+		cast, e.exprNode(t.A), cast, e.exprNode(t.B), cast, e.exprNode(t.C))
+}
+
 func (e *Emitter) exprBinaryNode(t expr.BinaryNode) string {
 	cast := e.exprPromotionBinaryNode(t)
 	switch t.Op {
 	case expr.OpAdd:
-		return fmt.Sprintf("%s(%s) + %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) + (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpSub:
-		return fmt.Sprintf("%s(%s) - %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) - (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpMult:
-		return fmt.Sprintf("%s(%s) * %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) * (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpDiv:
-		return fmt.Sprintf("%s(%s) / %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) / (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpMod:
-		return fmt.Sprintf("%s(%s) %% %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) %% (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpLessThan:
-		return fmt.Sprintf("%s(%s) < %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) < (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpLessThanEqual:
-		return fmt.Sprintf("%s(%s) <= %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) <= (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpGreaterThan:
-		return fmt.Sprintf("%s(%s) > %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) > (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpGreaterThanEqual:
-		return fmt.Sprintf("%s(%s) >= %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) >= (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpEqual:
-		return fmt.Sprintf("%s(%s) == %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) == (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpNotEqual:
-		return fmt.Sprintf("%s(%s) != %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) != (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpShiftLeft:
-		return fmt.Sprintf("%s(%s) << %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) << (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpShiftRight:
-		return fmt.Sprintf("%s(%s) >> %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) >> (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpBitAnd:
-		return fmt.Sprintf("%s(%s) & %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) & (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpBitOr:
-		return fmt.Sprintf("%s(%s) | %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) | (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpBitXor:
-		return fmt.Sprintf("%s(%s) ^ %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) ^ (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpLogicalAnd:
-		return fmt.Sprintf("%s(%s) && %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) && (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpLogicalOr:
-		return fmt.Sprintf("%s(%s) || %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("(%s)(%s) || (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	default:
 		panic(fmt.Errorf("unsupported binary op %s", t.Op))
 	}
@@ -368,8 +383,12 @@ func (e *Emitter) exprNode(node expr.Node) string {
 		}
 	case expr.IntNode:
 		return t.Integer.String()
+	case expr.BoolNode:
+		return t.String()
 	case expr.BinaryNode:
 		return e.exprBinaryNode(t)
+	case expr.TernaryNode:
+		return e.exprTernaryNode(t)
 	default:
 		panic(fmt.Errorf("unsupported expression node %T", t))
 	}
@@ -739,7 +758,7 @@ func (e *Emitter) typeSwitch(unit *goUnit, val *engine.ExprValue, forceEndian ty
 			if resolved.Kind != engine.StructKind {
 				panic(fmt.Errorf("expression %q yielded unexpected type %s (expected struct)", typ.User.Name, resolved.Kind))
 			}
-			readFn.printf("case %s(%s):", typeCast, goValue).indent()
+			readFn.printf("case (%s)(%s):", typeCast, goValue).indent()
 			readFn.printf("tmp%d := %s{}", readFn.tmp, goUnderlyingType)
 			e.setParams(fmt.Sprintf("tmp%d", readFn.tmp), typ.User, resolved.Struct.Type, &readFn)
 			readFn.printf("if err := tmp%d.Read(io); err != nil {", readFn.tmp).indent()
@@ -752,7 +771,7 @@ func (e *Emitter) typeSwitch(unit *goUnit, val *engine.ExprValue, forceEndian ty
 		default:
 			typ = typ.FoldEndian(e.endian)
 			call := e.readCallRef(&typ)
-			readFn.printf("case %s(%s):", typeCast, goValue).indent()
+			readFn.printf("case (%s)(%s):", typeCast, goValue).indent()
 			readFn.printf("tmp%d, err := %s", readFn.tmp, call)
 			readFn.printf("if err != nil {").indent()
 			readFn.printf("\treturn err")
