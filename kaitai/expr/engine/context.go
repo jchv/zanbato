@@ -102,52 +102,52 @@ var BooleanValueType = ValueType{Type: types.Type{TypeRef: &types.TypeRef{Kind: 
 
 // IntegerSymbolTable is the static symbol table of integer values.
 var IntegerSymbolTable = map[string]*ExprValue{
-	"to_s": NewMethodValue(MethodIntToString, []ValueType{}, StringValueType),
+	"to_s": NewBuiltinMethodValue(MethodIntToString, []ValueType{}, StringValueType),
 }
 
 // FloatSymbolTable is the static symbol table of floating point values.
 var FloatSymbolTable = map[string]*ExprValue{
-	"to_i": NewMethodValue(MethodIntToString, []ValueType{}, IntegerValueType),
+	"to_i": NewBuiltinMethodValue(MethodFloatToInt, []ValueType{}, IntegerValueType),
 }
 
 // ByteArraySymbolTable is the static symbol table of byte buffers.
 var ByteArraySymbolTable = map[string]*ExprValue{
-	"length": NewMethodValue(MethodByteArrayLength, []ValueType{}, IntegerValueType),
-	"to_s":   NewMethodValue(MethodByteArrayToString, []ValueType{StringValueType}, IntegerValueType),
+	"length": NewBuiltinMethodValue(MethodByteArrayLength, []ValueType{}, IntegerValueType),
+	"to_s":   NewBuiltinMethodValue(MethodByteArrayToString, []ValueType{StringValueType}, IntegerValueType),
 }
 
 // StringSymbolTable is the static symbol table of string values.
 var StringSymbolTable = map[string]*ExprValue{
-	"length":    NewMethodValue(MethodStringLength, []ValueType{}, IntegerValueType),
-	"reverse":   NewMethodValue(MethodStringReverse, []ValueType{}, StringValueType),
-	"substring": NewMethodValue(MethodStringSubstring, []ValueType{IntegerValueType, IntegerValueType}, StringValueType),
-	"to_i":      NewMethodValue(MethodStringToInt, []ValueType{IntegerValueType}, IntegerValueType),
+	"length":    NewBuiltinMethodValue(MethodStringLength, []ValueType{}, IntegerValueType),
+	"reverse":   NewBuiltinMethodValue(MethodStringReverse, []ValueType{}, StringValueType),
+	"substring": NewBuiltinMethodValue(MethodStringSubstring, []ValueType{IntegerValueType, IntegerValueType}, StringValueType),
+	"to_i":      NewBuiltinMethodValue(MethodStringToInt, []ValueType{IntegerValueType}, IntegerValueType),
 }
 
 // EnumValueSymbolTable is the static symbol table of enumeration values.
 var EnumValueSymbolTable = map[string]*ExprValue{
-	"to_i": NewMethodValue(MethodEnumToInt, []ValueType{}, IntegerValueType),
+	"to_i": NewBuiltinMethodValue(MethodEnumToInt, []ValueType{}, IntegerValueType),
 }
 
 // BooleanSymbolTable is the static symbol table of boolean values.
 var BooleanSymbolTable = map[string]*ExprValue{
-	"to_i": NewMethodValue(MethodBoolToInt, []ValueType{}, IntegerValueType),
+	"to_i": NewBuiltinMethodValue(MethodBoolToInt, []ValueType{}, IntegerValueType),
 }
 
 // StreamSymbolTable is the static symbol table of the stream object.
 var StreamSymbolTable = map[string]*ExprValue{
-	"eof":  NewMethodValue(MethodStreamEOF, []ValueType{}, BooleanValueType),
-	"size": NewMethodValue(MethodStreamSize, []ValueType{}, IntegerValueType),
-	"pos":  NewMethodValue(MethodStreamPos, []ValueType{}, IntegerValueType),
+	"eof":  NewBuiltinMethodValue(MethodStreamEOF, []ValueType{}, BooleanValueType),
+	"size": NewBuiltinMethodValue(MethodStreamSize, []ValueType{}, IntegerValueType),
+	"pos":  NewBuiltinMethodValue(MethodStreamPos, []ValueType{}, IntegerValueType),
 }
 
 func ArraySymbolTable(typ types.Type) map[string]*ExprValue {
 	return map[string]*ExprValue{
-		"first": NewMethodValue(MethodArrayFirst, []ValueType{}, ValueType{Type: typ}),
-		"last":  NewMethodValue(MethodArrayLast, []ValueType{}, ValueType{Type: typ}),
-		"size":  NewMethodValue(MethodArraySize, []ValueType{}, IntegerValueType),
-		"min":   NewMethodValue(MethodArrayMin, []ValueType{}, ValueType{Type: typ}),
-		"max":   NewMethodValue(MethodArrayMax, []ValueType{}, ValueType{Type: typ}),
+		"first": NewBuiltinMethodValue(MethodArrayFirst, []ValueType{}, ValueType{Type: typ}),
+		"last":  NewBuiltinMethodValue(MethodArrayLast, []ValueType{}, ValueType{Type: typ}),
+		"size":  NewBuiltinMethodValue(MethodArraySize, []ValueType{}, IntegerValueType),
+		"min":   NewBuiltinMethodValue(MethodArrayMin, []ValueType{}, ValueType{Type: typ}),
+		"max":   NewBuiltinMethodValue(MethodArrayMax, []ValueType{}, ValueType{Type: typ}),
 	}
 }
 
@@ -187,6 +187,16 @@ type StructTypeData struct {
 	Instances []*ExprType
 }
 
+type ArrayTypeData struct {
+	Elem *ExprType
+}
+
+// MethodFn is the runtime signature for methods.
+type MethodFn func(this *ExprValue, args []*ExprValue) (*ExprValue, error)
+
+// MethodData is a symbol sub-type for runtime methods.
+type MethodData struct{ Value MethodFn }
+
 // IntegerData is a symbol sub-type for integer literals.
 type IntegerData struct{ Value *big.Int }
 
@@ -197,7 +207,7 @@ type FloatData struct{ Value *big.Float }
 type BooleanData struct{ Value bool }
 
 // ArrayData is a symbol sub-type for array literals.
-type ArrayData struct{ Value []any }
+type ArrayData struct{ Value []*ExprValue }
 
 // ByteArrayData is a symbol sub-type for byte array literals.
 type ByteArrayData struct{ Value []byte }
@@ -251,6 +261,7 @@ type ExprType struct {
 
 	Method    *MethodTypeData
 	Struct    *StructTypeData
+	Array     *ArrayTypeData
 	Enum      *kaitai.Enum
 	EnumValue *kaitai.EnumValue
 	Param     *kaitai.Param
@@ -309,8 +320,8 @@ func NewStreamValue() *ExprValue {
 	}
 }
 
-// NewMethodValue creates an expression method symbol.
-func NewMethodValue(method BuiltinMethod, args []ValueType, ret ValueType) *ExprValue {
+// NewBuiltinMethodValue creates an expression method symbol.
+func NewBuiltinMethodValue(method BuiltinMethod, args []ValueType, ret ValueType) *ExprValue {
 	return &ExprValue{
 		Type: &ExprType{
 			Kind: MethodKind,
@@ -388,6 +399,19 @@ func NewBooleanLiteralValue(value bool) *ExprValue {
 	}
 }
 
+// NewArrayLiteralValue creates a new value for an array literal.
+func NewArrayLiteralValue(typ *ExprType, value []*ExprValue) *ExprValue {
+	elemValueType, ok := typ.Array.Elem.ValueType()
+	if !ok {
+		return nil
+	}
+	return &ExprValue{
+		Type:     typ,
+		Children: ArraySymbolTable(elemValueType.Type),
+		Array:    &ArrayData{Value: value},
+	}
+}
+
 var ByteArrayExprType = &ExprType{
 	Kind: ByteArrayKind,
 }
@@ -428,6 +452,16 @@ func setMethodsForKind(value *ExprValue, typ *types.TypeRef) {
 		value.Children = StringSymbolTable
 	case types.UntypedBool:
 		value.Children = BooleanSymbolTable
+	}
+}
+
+func NewArrayType(elem *ExprType, parent *ExprType) *ExprType {
+	return &ExprType{
+		Parent: parent,
+		Kind:   ArrayKind,
+		Array: &ArrayTypeData{
+			Elem: elem,
+		},
 	}
 }
 
