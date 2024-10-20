@@ -3,9 +3,12 @@ package golang
 import (
 	"bytes"
 	"fmt"
+	"go/token"
+	"hash/fnv"
 	"io"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -63,6 +66,18 @@ func (e *Emitter) typeSwitchName(n kaitai.Identifier) string {
 }
 
 func (e *Emitter) typeSwitchCaseTypeName(typ *engine.ExprType, value string) string {
+	if len(value) > 0 && value[0] == '"' {
+		if v, err := strconv.Unquote(value); err == nil {
+			value = v
+		}
+	}
+	if !token.IsIdentifier("_" + value) {
+		// HACK: this gets things working, but it's not a very good idea.
+		// Maybe kaitai already does something smart here.
+		h := fnv.New32()
+		_, _ = io.WriteString(h, value)
+		value = strconv.FormatUint(uint64(h.Sum32()), 36)
+	}
 	typeSwitchName := e.prefix(typ.Parent) + e.typeSwitchName(typ.Attr.Type.TypeSwitch.FieldName)
 	return typeSwitchName + "_" + value
 }
@@ -388,6 +403,8 @@ func (e *Emitter) exprNode(node expr.Node) string {
 		return e.exprBinaryNode(t)
 	case expr.TernaryNode:
 		return e.exprTernaryNode(t)
+	case expr.StringNode:
+		return strconv.Quote(t.Str)
 	default:
 		panic(fmt.Errorf("unsupported expression node %T", t))
 	}
@@ -698,7 +715,8 @@ func (e *Emitter) typeSwitchStruct(unit *goUnit, typ *engine.ExprType) {
 	for value, caseType := range ts.Cases {
 		goUnderlyingType := e.declTypeRef(&caseType, nil)
 		goValue := e.typeSwitchCaseValue(value)
-		caseStruct := e.typeSwitchCaseTypeName(typ, goValue)
+		goName := goValue
+		caseStruct := e.typeSwitchCaseTypeName(typ, goName)
 		unit.structs = append(unit.structs, goStruct{
 			name: caseStruct,
 			fields: []goVar{
