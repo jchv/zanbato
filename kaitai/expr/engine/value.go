@@ -99,6 +99,10 @@ func ResultTypeOfNode(context *Context, node expr.Node) ExprResultType {
 
 		// TODO: need better solution than passing first operand
 		return ExprResultType{val: NewCastedValue(a, ValueType{Type: types.Type{TypeRef: &types.TypeRef{Kind: k}}})}
+
+	case expr.TernaryNode:
+		// TODO: need better solution than passing second operand
+		return ResultTypeOfNode(context, node.B)
 	}
 	return ExprResultType{}
 }
