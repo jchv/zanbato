@@ -13,6 +13,7 @@ import (
 	"github.com/jchv/zanbato/kaitai/emitter"
 	"github.com/jchv/zanbato/kaitai/expr"
 	"github.com/jchv/zanbato/kaitai/expr/engine"
+	"github.com/jchv/zanbato/kaitai/resolve"
 	"github.com/jchv/zanbato/kaitai/types"
 )
 
@@ -23,20 +24,18 @@ const (
 	kaitaiWriter             = kaitaiRuntimePackageName + ".Writer"
 )
 
-type ResolveFunc func(from, to string) (string, *kaitai.Struct)
-
 // Emitter emits Go code for kaitai structs.
 type Emitter struct {
 	pkgname   string
 	pkgpath   string
-	resolver  ResolveFunc
+	resolver  resolve.Resolver
 	endian    types.EndianKind
 	context   *engine.Context
 	artifacts []emitter.Artifact
 }
 
 // NewEmitter constructs a new emitter with the given parameters.
-func NewEmitter(pkgpath string, resolver ResolveFunc) *Emitter {
+func NewEmitter(pkgpath string, resolver resolve.Resolver) *Emitter {
 	return &Emitter{
 		pkgname:  path.Base(pkgpath),
 		pkgpath:  pkgpath,
@@ -913,7 +912,11 @@ func (e *Emitter) struc(inputname string, unit *goUnit, val *engine.ExprValue) {
 
 	// Handle imports before anything else...
 	for _, n := range ks.Meta.Imports {
-		e.root(e.resolver(inputname, n))
+		inputname, s, err := e.resolver.Resolve(inputname, n)
+		if err != nil {
+			panic(err)
+		}
+		e.root(inputname, s)
 	}
 
 	// Then handle nested structures

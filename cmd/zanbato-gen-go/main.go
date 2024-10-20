@@ -2,14 +2,12 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 
-	"github.com/jchv/zanbato/kaitai"
 	"github.com/jchv/zanbato/kaitai/emitter/golang"
+	"github.com/jchv/zanbato/kaitai/resolve"
 )
 
 func main() {
@@ -20,28 +18,13 @@ func main() {
 		log.Fatalln("Wrong number of arguments; pass your root .ksy path.")
 	}
 	rootname := flag.Arg(0)
-	resolver := func(from, to string) (string, *kaitai.Struct) {
-		basename := to
-		if from != "" {
-			basename = path.Join(path.Dir(from), to)
-		}
-		candidates := []string{basename + ".ksy", basename}
-		for _, name := range candidates {
-			file, err := os.Open(name)
-			if err != nil {
-				continue
-			}
-			defer file.Close()
-			struc, err := kaitai.ParseStruct(file)
-			if err != nil {
-				panic(fmt.Errorf("error loading %q: %v", name, err))
-			}
-			return basename, struc
-		}
-		panic(fmt.Errorf("failed to load %s from %s (checked %v)", to, from, candidates))
-	}
+	resolver := resolve.NewOSResolver()
 	emitter := golang.NewEmitter(*pkg, resolver)
-	artifacts := emitter.Emit(resolver("", rootname))
+	basename, struc, err := resolver.Resolve("", rootname)
+	if err != nil {
+		log.Fatalln("error resolving root struct: %w", err)
+	}
+	artifacts := emitter.Emit(basename, struc)
 	for _, artifact := range artifacts {
 		outname := filepath.Join(*out, artifact.Filename)
 		file, err := os.Create(outname)
