@@ -218,7 +218,7 @@ func ParseExpr(src string) (result *Expr, err error) {
 func MustParseExpr(src string) *Expr {
 	expr, err := ParseExpr(src)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("error in expression %q: %w", src, err))
 	}
 	return expr
 }
