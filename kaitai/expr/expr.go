@@ -423,6 +423,7 @@ func (p *parser) expr(depth int) Node {
 	case c == '"':
 		n = p.strlit()
 	case c == '(':
+		p.next()
 		n = p.expr(0)
 		if p.next() != ')' {
 			panic(fmt.Errorf("expected `)`"))
@@ -512,22 +513,23 @@ func (p *parser) expr(depth int) Node {
 		}
 		switch p.peek() {
 		case '=':
-			p.next()
-			if p.next() != '=' {
-				panic(fmt.Errorf("unexpected `=`"))
+			if p.peek2() != '=' {
+				panic(fmt.Errorf("expected '=', got %q", p.peek2()))
 			}
+			p.advance(2)
 			n = BinaryNode{Op: OpEqual, A: n, B: p.expr(depthAddExpr)}
 			continue
 		case '!':
-			p.next()
-			if p.next() != '=' {
-				panic(fmt.Errorf("unexpected `!`"))
+			if p.peek2() != '=' {
+				panic(fmt.Errorf("expected '=', got %q", p.peek2()))
 			}
+			p.advance(2)
 			n = BinaryNode{Op: OpNotEqual, A: n, B: p.expr(depthAddExpr)}
 			continue
 		case '<':
 			p.next()
 			if p.peek() == '=' {
+				p.next()
 				n = BinaryNode{Op: OpLessThanEqual, A: n, B: p.expr(depthAddExpr)}
 				continue
 			} else {
@@ -537,6 +539,7 @@ func (p *parser) expr(depth int) Node {
 		case '>':
 			p.next()
 			if p.peek() == '=' {
+				p.next()
 				n = BinaryNode{Op: OpGreaterThanEqual, A: n, B: p.expr(depthAddExpr)}
 				continue
 			} else {
