@@ -19,7 +19,7 @@
         zanbato = pkgs.buildGoModule {
           name = "zanbato";
           src = self;
-          vendorHash = "sha256-jsz/yIWjo71TqXcz4Jfv6CE33eL+IHmC0rwgnqJyt0E=";
+          vendorHash = "sha256-HQMgcOmzI725cmQhDJKvxL00J0EMuBLa9Ji35LnohrY=";
         };
         format = pkgs.writeShellApplication {
           name = "format";
