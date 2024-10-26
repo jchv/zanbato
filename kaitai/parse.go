@@ -55,6 +55,14 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 		}
 	}
 
+	if typ.Meta.BitEndian.Value == "le" {
+		result.Meta.BitEndian.Kind = types.LittleBitEndian
+	} else if typ.Meta.BitEndian.Value == "be" {
+		result.Meta.BitEndian.Kind = types.BigBitEndian
+	} else if typ.Meta.BitEndian.Value != "" {
+		return nil, fmt.Errorf("unknown bit endian value %s", typ.Meta.BitEndian.Value)
+	}
+
 	for _, spec := range typ.Params {
 		param, err := translateParamSpec(spec)
 		if err != nil {

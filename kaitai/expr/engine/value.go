@@ -56,11 +56,15 @@ func ResultTypeOfNode(context *Context, node expr.Node) ExprResultType {
 		return ExprResultType{typ: typ}
 
 	case expr.MemberNode:
-		op := ResultTypeOfNode(context, node.Operand)
-		if op.val == nil {
+		val := ResultTypeOfNode(context, node.Operand).Value()
+		if val == nil {
 			return ExprResultType{}
 		}
-		return ExprResultType{val: op.val.Child(node.Property)}
+		val = NewValueOf(context, val.Type)
+		if val == nil {
+			return ExprResultType{}
+		}
+		return ExprResultType{val: val.Child(node.Property)}
 
 	case expr.UnaryNode:
 		return ResultTypeOfNode(context, node.Operand)

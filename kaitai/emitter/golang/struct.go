@@ -33,6 +33,7 @@ type Emitter struct {
 	pkgpath   string
 	resolver  resolve.Resolver
 	endian    types.EndianKind
+	bitEndian types.BitEndianKind
 	context   *engine.Context
 	artifacts []emitter.Artifact
 }
@@ -126,7 +127,11 @@ func (e *Emitter) declTypeRef(n *types.TypeRef, r types.RepeatType) string {
 	case types.S8, types.S8le, types.S8be:
 		return "int64"
 	case types.Bits:
-		return "uint64"
+		if n.Bits.Width == 1 {
+			return "bool"
+		} else {
+			return "uint64"
+		}
 	case types.F4, types.F4le, types.F4be:
 		return "float32"
 	case types.F8, types.F8le, types.F8be:
@@ -214,7 +219,11 @@ func (e *Emitter) readCallRef(n *types.TypeRef) string {
 	case types.S8be:
 		return "io.ReadS8be()"
 	case types.Bits:
-		panic("not implemented yet: bits")
+		endianSuffix := "Be"
+		if n.Bits.Endian.Kind == types.LittleBitEndian {
+			endianSuffix = "Le"
+		}
+		return fmt.Sprintf("io.ReadBitsInt%s(%d)", endianSuffix, n.Bits.Width)
 	case types.F4le:
 		return "io.ReadF4le()"
 	case types.F4be:
@@ -372,28 +381,44 @@ func (e *Emitter) exprBinaryNode(t expr.BinaryNode) string {
 	}
 }
 
-func (e *Emitter) exprNode(node expr.Node) string {
+func (e *Emitter) exprNodeNested(node expr.Node) string {
 	switch t := node.(type) {
-	case expr.IdentNode, expr.ScopeNode, expr.MemberNode:
+	case expr.UnaryNode:
+		switch t.Op {
+		case expr.OpLogicalNot:
+			return "!" + e.exprNode(t.Operand)
+		default:
+			panic(fmt.Errorf("unsupported unary op node %s", t.Op))
+		}
+	case expr.IdentNode:
 		v := engine.ResultTypeOfNode(e.context, t).Value()
 		if v == nil {
-			panic(fmt.Errorf("unable to use subexpression %s as value", t))
+			panic(fmt.Errorf("unable to use nested ident subexpression %s as value", t))
 		}
 		switch v.Type.Kind {
 		case engine.ParamKind:
-			// TODO: need to handle struct/instance navigation...
-			return fmt.Sprintf("this.%s", e.fieldName(v.Type.Param.ID))
+			return e.fieldName(v.Type.Param.ID)
 		case engine.AttrKind:
-			// TODO: need to handle struct/instance navigation...
-			return fmt.Sprintf("this.%s", e.fieldName(v.Type.Attr.ID))
-		case engine.IntegerKind:
-			if v.Type.Parent != nil && v.Type.Parent.Kind == engine.EnumValueKind {
-				return e.enumValueName(e.parentStruct(v), e.parentEnum(v), v.Type.Parent.EnumValue.ID)
-			} else {
-				panic(fmt.Errorf("unexpected constant in subexpression %s", t))
-			}
+			return e.fieldName(v.Type.Attr.ID)
+		case engine.AliasKind:
+			return v.Type.Alias.Target
 		default:
-			panic(fmt.Errorf("unsupported value type reference %s in subexpression %s", v.Type.Kind, t))
+			panic(fmt.Errorf("unsupported value type reference %s in nested ident subexpression %s", v.Type.Kind, t))
+		}
+	case expr.ScopeNode:
+		panic(fmt.Errorf("unexpected nested scoped expression in %s", t))
+	case expr.MemberNode:
+		v := engine.ResultTypeOfNode(e.context, t).Value()
+		if v == nil {
+			panic(fmt.Errorf("unable to use nested member subexpression %s as value", t))
+		}
+		switch v.Type.Kind {
+		case engine.ParamKind:
+			return fmt.Sprintf("%s.%s", e.exprNodeNested(t.Operand), e.fieldName(v.Type.Param.ID))
+		case engine.AttrKind:
+			return fmt.Sprintf("%s.%s", e.exprNodeNested(t.Operand), e.fieldName(v.Type.Attr.ID))
+		default:
+			panic(fmt.Errorf("unsupported value type reference %s in nested member subexpression %s", v.Type.Kind, t))
 		}
 	case expr.IntNode:
 		return t.Integer.String()
@@ -410,9 +435,57 @@ func (e *Emitter) exprNode(node expr.Node) string {
 	}
 }
 
+func (e *Emitter) exprNode(node expr.Node) string {
+	switch t := node.(type) {
+	case expr.IdentNode:
+		v := engine.ResultTypeOfNode(e.context, t).Value()
+		if v == nil {
+			panic(fmt.Errorf("unable to use primary ident expression %s as value", t))
+		}
+		switch v.Type.Kind {
+		case engine.ParamKind:
+			return fmt.Sprintf("this.%s", e.fieldName(v.Type.Param.ID))
+		case engine.AttrKind:
+			return fmt.Sprintf("this.%s", e.fieldName(v.Type.Attr.ID))
+		case engine.AliasKind:
+			return v.Type.Alias.Target
+		default:
+			panic(fmt.Errorf("unsupported value type reference %s in ident subexpression %s", v.Type.Kind, t))
+		}
+	case expr.ScopeNode:
+		v := engine.ResultTypeOfNode(e.context, t).Value()
+		if v == nil {
+			panic(fmt.Errorf("unable to use primary scope expression %s as value", t))
+		}
+		switch v.Type.Kind {
+		case engine.IntegerKind:
+			if v.Type.Parent != nil && v.Type.Parent.Kind == engine.EnumValueKind {
+				return e.enumValueName(e.parentStruct(v), e.parentEnum(v), v.Type.Parent.EnumValue.ID)
+			} else {
+				panic(fmt.Errorf("unexpected constant in scope subexpression %s", t))
+			}
+		default:
+			panic(fmt.Errorf("unsupported value type reference %s in scope subexpression %s", v.Type.Kind, t))
+		}
+	default:
+		return e.exprNodeNested(node)
+	}
+}
+
 func (e *Emitter) root(inputname string, s *kaitai.Struct) {
+	oldEndian := e.endian
+	oldBitEndian := e.bitEndian
+
+	defer func() {
+		e.endian = oldEndian
+		e.bitEndian = oldBitEndian
+	}()
+
 	if s.Meta.Endian.Kind != types.UnspecifiedOrder {
 		e.endian = s.Meta.Endian.Kind
+	}
+	if s.Meta.BitEndian.Kind != types.UnspecifiedBitOrder {
+		e.bitEndian = s.Meta.BitEndian.Kind
 	}
 
 	unit := goUnit{
@@ -518,7 +591,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 		endianSuffix = "BE"
 	}
 
-	rt := a.Type.FoldEndian(e.endian)
+	rt := a.Type.FoldEndian(e.endian).FoldBitEndian(e.bitEndian)
 
 	if !e.isValidEndianType(rt) {
 		fn.printf("return kaitai.UndecidedEndiannessError{}")
@@ -584,7 +657,19 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				fn.unindent().printf("}")
 
 			case types.RepeatUntil:
-				panic("not implemented: repeat until")
+				oldContext := e.context
+				e.context = e.context.WithTemporary(engine.NewAliasSymbol(typ, engine.NewAttrValue(typ, nil), fmt.Sprintf("tmp%d", fn.tmp)))
+				fn.printf("for {").indent()
+				fn.printf("var tmp%d %s", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
+				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
+				fn.printf("return err")
+				fn.unindent().printf("}")
+				fn.printf("if bool(%s) {", e.expr(repeat.UntilExpr)).indent()
+				fn.printf("break")
+				fn.unindent().printf("}")
+				fn.printf("this.%s = append(this.%s, tmp%d)", fieldName, fieldName, fn.tmp)
+				fn.unindent().printf("}")
+				e.context = oldContext
 
 			case nil:
 				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
@@ -606,6 +691,11 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				cast = "string"
 			}
 
+			assignSuffix := ""
+			if rt.TypeRef.Bits != nil && rt.TypeRef.Bits.Width == 1 {
+				assignSuffix = " == 1"
+			}
+
 			switch repeat := a.Repeat.(type) {
 			case types.RepeatEOS:
 				fn.printf("for {").indent()
@@ -622,7 +712,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				fn.printf("if err != nil {").indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
-				fn.printf("this.%s = append(this.%s, %s(tmp%d))", fieldName, fieldName, cast, fn.tmp)
+				fn.printf("this.%s = append(this.%s, %s(tmp%d)%s)", fieldName, fieldName, cast, fn.tmp, assignSuffix)
 
 				fn.unindent().printf("}")
 
@@ -634,18 +724,30 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				fn.printf("if err != nil {").indent()
 				fn.printf("return err")
 				fn.unindent().printf("\t}")
-				fn.printf("this.%s = append(this.%s, %s(tmp%d))", fieldName, fieldName, cast, fn.tmp)
+				fn.printf("this.%s = append(this.%s, %s(tmp%d)%s)", fieldName, fieldName, cast, fn.tmp, assignSuffix)
 				fn.unindent().printf("}")
 
 			case types.RepeatUntil:
-				panic("not implemented: repeat until")
+				oldContext := e.context
+				e.context = e.context.WithTemporary(engine.NewAliasSymbol(typ, engine.NewAttrValue(typ, nil), fmt.Sprintf("tmp%d", fn.tmp)))
+				fn.printf("for {").indent()
+				fn.printf("tmp%d, err := %s", fn.tmp, readCall)
+				fn.printf("if err != nil {").indent()
+				fn.printf("return err")
+				fn.unindent().printf("}")
+				fn.printf("if bool(%s) {", e.expr(repeat.UntilExpr)).indent()
+				fn.printf("break")
+				fn.unindent().printf("}")
+				fn.printf("this.%s = append(this.%s, %s(tmp%d)%s)", fieldName, fieldName, cast, fn.tmp, assignSuffix)
+				fn.unindent().printf("}")
+				e.context = oldContext
 
 			case nil:
 				fn.printf("tmp%d, err := %s", fn.tmp, readCall)
 				fn.printf("if err != nil {").indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
-				fn.printf("this.%s = %s(tmp%d)", fieldName, cast, fn.tmp)
+				fn.printf("this.%s = %s(tmp%d)%s", fieldName, cast, fn.tmp, assignSuffix)
 			}
 
 			if a.Contents != nil {
@@ -786,7 +888,7 @@ func (e *Emitter) typeSwitch(unit *goUnit, val *engine.ExprValue, forceEndian ty
 			readFn.unindent()
 
 		default:
-			typ = typ.FoldEndian(e.endian)
+			typ = typ.FoldEndian(e.endian).FoldBitEndian(e.bitEndian)
 			call := e.readCallRef(&typ)
 			readFn.printf("case (%s)(%s):", typeCast, goValue).indent()
 			readFn.printf("tmp%d, err := %s", readFn.tmp, call)

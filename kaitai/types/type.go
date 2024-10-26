@@ -3,7 +3,9 @@ package types
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
+	"strconv"
 	"strings"
 
 	"github.com/jchv/zanbato/kaitai/expr"
@@ -160,6 +162,12 @@ func (k Kind) Promote(k2 Kind) Kind {
 	return k
 }
 
+// BitsType contains data for bits types.
+type BitsType struct {
+	Width  int
+	Endian BitEndian
+}
+
 // BytesType contains data for bytes types.
 type BytesType struct {
 	Size       *expr.Expr
@@ -196,6 +204,7 @@ type TypeSwitch struct {
 
 type TypeRef struct {
 	Kind   Kind
+	Bits   *BitsType
 	Bytes  *BytesType
 	String *StringType
 	User   *UserType
@@ -251,6 +260,15 @@ func (t TypeRef) FoldEndian(endian EndianKind) TypeRef {
 	return t
 }
 
+func (t TypeRef) FoldBitEndian(endian BitEndianKind) TypeRef {
+	if t.Bits != nil && t.Bits.Endian.Kind == UnspecifiedBitOrder {
+		bits := *t.Bits
+		bits.Endian.Kind = endian
+		t.Bits = &bits
+	}
+	return t
+}
+
 func (t TypeRef) HasDependentEndian() bool {
 	switch t.Kind {
 	case U2, U4, U8, S2, S4, S8, F4, F8:
@@ -263,6 +281,15 @@ func (t TypeSwitch) FoldEndian(endian EndianKind) TypeSwitch {
 	cases := make(map[string]TypeRef)
 	for key, value := range t.Cases {
 		cases[key] = value.FoldEndian(endian)
+	}
+	t.Cases = cases
+	return t
+}
+
+func (t TypeSwitch) FoldBitEndian(endian BitEndianKind) TypeSwitch {
+	cases := make(map[string]TypeRef)
+	for key, value := range t.Cases {
+		cases[key] = value.FoldBitEndian(endian)
 	}
 	t.Cases = cases
 	return t
@@ -286,6 +313,23 @@ func (t Type) FoldEndian(endian EndianKind) Type {
 	typeSwitch := t.TypeSwitch
 	if typeSwitch != nil {
 		newTypeSwitch := typeSwitch.FoldEndian(endian)
+		typeSwitch = &newTypeSwitch
+	}
+	return Type{
+		TypeRef:    typeRef,
+		TypeSwitch: typeSwitch,
+	}
+}
+
+func (t Type) FoldBitEndian(endian BitEndianKind) Type {
+	typeRef := t.TypeRef
+	if typeRef != nil {
+		newTypeRef := typeRef.FoldBitEndian(endian)
+		typeRef = &newTypeRef
+	}
+	typeSwitch := t.TypeSwitch
+	if typeSwitch != nil {
+		newTypeSwitch := typeSwitch.FoldBitEndian(endian)
 		typeSwitch = &newTypeSwitch
 	}
 	return Type{
@@ -377,7 +421,8 @@ func ParseAttrType(attr ksy.AttributeSpec, instance bool) (Type, error) {
 			case String:
 				typ.String.SizeEOS = attr.SizeEos
 			default:
-				return Type{}, fmt.Errorf("size-eos on type %s not supported", typ.Kind)
+				// TODO: implement some interface for diagnostics
+				log.Printf("warning: size-eos on type %s does not do anything", typ.Kind)
 			}
 		}
 
@@ -463,8 +508,8 @@ func parseUserType(typestr string) (TypeRef, error) {
 
 // ParseTypeRef parses a type from a type string.
 func ParseTypeRef(typestr string) (TypeRef, error) {
-	result := TypeRef{}
 	if kind, ok := parseBasicDataType(typestr); ok {
+		result := TypeRef{}
 		result.Kind = kind
 		switch kind {
 		case Bytes:
@@ -484,7 +529,38 @@ func ParseTypeRef(typestr string) (TypeRef, error) {
 		}
 		return result, nil
 	}
+	if result, ok := parseBitsDataType(typestr); ok {
+		return result, nil
+	}
 	return parseUserType(typestr)
+}
+
+func parseBitsDataType(typestr string) (TypeRef, bool) {
+	if len(typestr) == 0 || typestr[0] != 'b' {
+		return TypeRef{}, false
+	}
+	endian := BitEndian{}
+	typestr = typestr[1:]
+	if len(typestr) > 2 {
+		switch typestr[len(typestr)-2:] {
+		case "be":
+			endian.Kind = BigBitEndian
+			typestr = typestr[:len(typestr)-2]
+		case "le":
+			endian.Kind = LittleBitEndian
+			typestr = typestr[:len(typestr)-2]
+		}
+	}
+	if w, err := strconv.Atoi(typestr); err == nil {
+		return TypeRef{
+			Kind: Bits,
+			Bits: &BitsType{
+				Width:  w,
+				Endian: endian,
+			},
+		}, true
+	}
+	return TypeRef{}, false
 }
 
 func parseBasicDataType(typestr string) (Kind, bool) {

@@ -11,23 +11,23 @@ Some complicated Kaitai Struct definitions will work, however, proceed with caut
 Here are some of the features that do work:
 
 - Structures
-  + ✅ Basic data types (integers, strings, bytes, etc.)
+  + ✅ Basic data types (integers, strings, bits, bytes, etc.)
   + ✅ Type switches
-    - ⚠️ **Only switching on enumerations is supported for now.**
   + ✅ Endianness
     - ✅ Inheriting endianness
     - ✅ Endian switching
+    - ✅ Bit-endianness
   + ✅ Referring to other types
   + ✅ Repeating:
     - ✅ Repeat count of iterations
     - ✅ Repeat until end of stream
-    - ⚠️ **NOTE: Repeat until expression is not supported**
+    - ✅ Repeat until expression is true
 - ✅ Enumerations
 - ✅ Parameters
 - ✅ Expressions
   + ✅ All unary and binary operators
-  + ⚠️ **Limited support for field access.** Navigating structs is currently unsupported.
-  + ⚠️ **In addition, special variables are not implemented.**
+  + ⚠️ **Limited support for field access.** Navigating the parent and root struct is unsupported.
+  + ⚠️ **In addition, some special variables are not implemented.**
   + ⚠️ **Ternary operator is not supported yet.**
   + ⚠️ **Operator precedence may differ from Kaitai Struct.** The operator precedence of Kaitai Struct expressions is not specified yet.
 - ⚠️ **Instances are not implemented.**

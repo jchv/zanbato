@@ -222,6 +222,13 @@ type CastData struct {
 	ValueType ValueType
 }
 
+// AliasData is a symbol sub type that refers to an alias for another symbol.
+type AliasData struct {
+	Type   *ExprType
+	Value  *ExprValue
+	Target string
+}
+
 type StructData struct {
 	Params    []*ExprValue
 	Attrs     []*ExprValue
@@ -250,6 +257,7 @@ const (
 	AttrKind
 	InstanceKind
 	CastedValueKind
+	AliasKind
 )
 
 // ExprType represents a single expression type.
@@ -269,6 +277,7 @@ type ExprType struct {
 	Instance  *kaitai.Attr
 	Elem      *types.TypeRef
 	Cast      *CastData
+	Alias     *AliasData
 }
 
 // ExprValue represents a single expression value.
@@ -303,6 +312,80 @@ func NewValueRoot() *ExprValue {
 	return &ExprValue{
 		Children: make(map[string]*ExprValue),
 		Type:     NewTypeRoot(),
+	}
+}
+
+// NewValueOf creates a new value of a given type.
+func NewValueOf(context *Context, typ *ExprType) *ExprValue {
+	switch typ.Kind {
+	case StructParentKind:
+		return NewStructValueSymbol(typ, nil)
+	case StructRootKind:
+		return NewStructValueSymbol(typ, nil)
+	case IntegerKind:
+		return NewIntegerLiteralValue(big.NewInt(0))
+	case FloatKind:
+		return NewFloatLiteralValue(big.NewFloat(0))
+	case BooleanKind:
+		return NewBooleanLiteralValue(false)
+	case ArrayKind:
+		return NewArrayLiteralValue(typ, []*ExprValue{})
+	case ByteArrayKind:
+		return NewByteArrayLiteralValue([]byte{})
+	case StringKind:
+		return NewStringLiteralValue("")
+	case StructKind:
+		return NewStructValueSymbol(typ, nil)
+	case EnumValueKind:
+		return NewIntegerLiteralValue(typ.EnumValue.Value)
+	case ParamKind:
+		return NewValueOfType(context, typ.Param.Type)
+	case AttrKind:
+		if typ.Attr.Type.TypeRef == nil {
+			return nil
+		}
+		return NewValueOfType(context, *typ.Attr.Type.TypeRef)
+	case InstanceKind:
+		if typ.Instance.Type.TypeRef == nil {
+			return nil
+		}
+		return NewValueOfType(context, *typ.Instance.Type.TypeRef)
+	case AliasKind:
+		return NewValueOf(context, typ.Alias.Type)
+	default:
+		return nil
+	}
+}
+
+func NewValueOfType(context *Context, typ types.TypeRef) *ExprValue {
+	switch typ.Kind {
+	case types.U1, types.U2, types.U2le, types.U2be, types.U4,
+		types.U4le, types.U4be, types.U8, types.U8le, types.U8be,
+		types.S1, types.S2, types.S2le, types.S2be, types.S4,
+		types.S4le, types.S4be, types.S8, types.S8le, types.S8be,
+		types.UntypedInt:
+		return NewIntegerLiteralValue(big.NewInt(0))
+	case types.Bits:
+		if typ.Bits.Width == 1 {
+			return NewBooleanLiteralValue(false)
+		} else {
+			return NewIntegerLiteralValue(big.NewInt(0))
+		}
+	case types.F4, types.F4le, types.F4be,
+		types.F8, types.F8le, types.F8be,
+		types.UntypedFloat:
+		return NewFloatLiteralValue(big.NewFloat(0))
+	case types.Bytes:
+		return NewByteArrayLiteralValue([]byte{})
+	case types.String:
+		return NewStringLiteralValue("")
+	case types.User:
+		resolved, _ := context.ResolveType(typ.User.Name)
+		return NewValueOf(context, resolved)
+	case types.UntypedBool:
+		return NewBooleanLiteralValue(false)
+	default:
+		return nil
 	}
 }
 
@@ -562,6 +645,22 @@ func NewCastedValue(sym *ExprValue, cast ValueType) *ExprValue {
 	return value
 }
 
+// NewAliasSymbol creates a new symbol that is an alias of another symbol.
+func NewAliasSymbol(typ *ExprType, val *ExprValue, target string) *ExprValue {
+	value := &ExprValue{
+		Parent: nil,
+		Type: &ExprType{
+			Kind: AliasKind,
+			Alias: &AliasData{
+				Type:   typ,
+				Value:  val,
+				Target: target,
+			},
+		},
+	}
+	return value
+}
+
 // NewStructTypeSymbol creates a new symbol referring to a user-defined struct
 // type. parent should be nil in top-level structs.
 func NewStructTypeSymbol(struc *kaitai.Struct, parent *ExprType) *ExprType {
@@ -671,6 +770,8 @@ func (s *ExprType) ValueType() (ValueType, bool) {
 		}, true
 	case CastedValueKind:
 		return s.Cast.ValueType, true
+	case AliasKind:
+		return s.Alias.Type.ValueType()
 	}
 	return ValueType{}, false
 }
@@ -713,6 +814,7 @@ type Context struct {
 	local  *ExprValue
 
 	stream *ExprValue
+	tmp    *ExprValue
 }
 
 // NewContext creates a new symbol context.
@@ -741,12 +843,17 @@ func (context *Context) AddModuleSymbol(name string, value *ExprValue) {
 	context.module.addMember(name, value)
 }
 
+func (context *Context) AddLocalSymbol(name string, value *ExprValue) {
+	context.local.addMember(name, value)
+}
+
 func (context *Context) WithModuleRoot(symbol *ExprValue) *Context {
 	return &Context{
 		global: context.global,
 		module: symbol,
 		local:  context.local,
 		stream: context.stream,
+		tmp:    context.tmp,
 	}
 }
 
@@ -756,6 +863,17 @@ func (context *Context) WithLocalRoot(symbol *ExprValue) *Context {
 		module: context.module,
 		local:  symbol,
 		stream: context.stream,
+		tmp:    context.tmp,
+	}
+}
+
+func (context *Context) WithTemporary(symbol *ExprValue) *Context {
+	return &Context{
+		global: context.global,
+		module: context.module,
+		local:  context.local,
+		stream: context.stream,
+		tmp:    symbol,
 	}
 }
 
@@ -769,6 +887,9 @@ func (context *Context) ResolveIntrinsic(name string) *ExprValue {
 
 	case "_io":
 		return context.stream
+
+	case "_":
+		return context.tmp
 	}
 	return nil
 }

@@ -62,11 +62,12 @@ func _() {
 	_ = x[AttrKind-16]
 	_ = x[InstanceKind-17]
 	_ = x[CastedValueKind-18]
+	_ = x[AliasKind-19]
 }
 
-const _ExprKind_name = "InvalidKindRootKindStreamKindMethodKindStructParentKindStructRootKindIntegerKindFloatKindBooleanKindArrayKindByteArrayKindStringKindStructKindEnumKindEnumValueKindParamKindAttrKindInstanceKindCastedValueKind"
+const _ExprKind_name = "InvalidKindRootKindStreamKindMethodKindStructParentKindStructRootKindIntegerKindFloatKindBooleanKindArrayKindByteArrayKindStringKindStructKindEnumKindEnumValueKindParamKindAttrKindInstanceKindCastedValueKindAliasKind"
 
-var _ExprKind_index = [...]uint8{0, 11, 19, 29, 39, 55, 69, 80, 89, 100, 109, 122, 132, 142, 150, 163, 172, 180, 192, 207}
+var _ExprKind_index = [...]uint8{0, 11, 19, 29, 39, 55, 69, 80, 89, 100, 109, 122, 132, 142, 150, 163, 172, 180, 192, 207, 216}
 
 func (i ExprKind) String() string {
 	if i < 0 || i >= ExprKind(len(_ExprKind_index)-1) {

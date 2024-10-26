@@ -14,8 +14,9 @@ type Param struct {
 
 // Meta contains the relevant metadata information.
 type Meta struct {
-	Endian  types.Endian
-	Imports []string
+	Endian    types.Endian
+	BitEndian types.BitEndian
+	Imports   []string
 }
 
 // Struct contains a Kaitai struct.

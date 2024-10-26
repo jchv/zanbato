@@ -200,12 +200,27 @@ func (m MemberNode) String() string {
 	return m.Operand.String() + "." + m.Property
 }
 
+// SubscriptNode is a subscript expression (a[b])
+type SubscriptNode struct {
+	A, B Node
+}
+
+func (SubscriptNode) isnode() {}
+
+func (m SubscriptNode) String() string {
+	return m.A.String() + "[" + m.B.String() + "]"
+}
+
 // ParseExpr parses an expression into an AST.
 func ParseExpr(src string) (result *Expr, err error) {
 	p := parser{[]rune(src), 0}
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("error parsing expression at character %d: %s", p.pos+1, r)
+			if err, ok := r.(error); ok {
+				err = fmt.Errorf("error parsing expression at character %d: %w", p.pos+1, err)
+			} else {
+				panic(r)
+			}
 		}
 	}()
 	if src == "" {
@@ -446,6 +461,13 @@ func (p *parser) expr(depth int) Node {
 		case '.':
 			p.next()
 			n = MemberNode{Operand: n, Property: p.token(isident)}
+			continue
+		case '[':
+			p.next()
+			n = SubscriptNode{A: n, B: p.expr(0)}
+			if p.next() != ']' {
+				panic(fmt.Errorf("expected `]`"))
+			}
 			continue
 		case 0:
 			return n

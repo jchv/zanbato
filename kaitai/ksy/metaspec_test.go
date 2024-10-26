@@ -41,6 +41,11 @@ endian:
 			MetaSpec{Endian: EndianSpec{SwitchOn: "_parent.indicator", Cases: EndianCaseMapSpec{"[0x49, 0x49]": "le", "[0x4d, 0x4d]": "be"}}},
 		},
 		{
+			"bit endian simple",
+			`bit-endian: le`,
+			MetaSpec{BitEndian: BitEndianSpec{Value: "le"}},
+		},
+		{
 			"gettext_mo meta",
 			`
 id: gettext_mo

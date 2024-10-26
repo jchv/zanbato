@@ -3,7 +3,7 @@ package ksy
 // TypeCaseMapSpec maps cases for type switches.
 type TypeCaseMapSpec map[string]string
 
-// AttrTypeSpec decodes Kaitai endianness specifications.
+// AttrTypeSpec decodes Kaitai attribute type specifications.
 type AttrTypeSpec struct {
 	Value    string          `yaml:"-,omitempty"`
 	SwitchOn string          `yaml:"switch-on,omitempty"`
