@@ -36,6 +36,9 @@ type Emitter struct {
 	bitEndian types.BitEndianKind
 	context   *engine.Context
 	artifacts []emitter.Artifact
+
+	needRoot   bool
+	needParent bool
 }
 
 // NewEmitter constructs a new emitter with the given parameters.
@@ -392,8 +395,17 @@ func (e *Emitter) exprNodeNested(node expr.Node) string {
 		}
 	case expr.IdentNode:
 		v := engine.ResultTypeOfNode(e.context, t).Value()
-		if v == nil {
+		switch v {
+		case nil:
 			panic(fmt.Errorf("unable to use nested ident subexpression %s as value", t))
+		case e.context.RootValue():
+			// TODO: need to handle populating _root
+			e.needRoot = true
+			return "_root"
+		case e.context.ParentValue():
+			// TODO: need to handle populating _parent
+			e.needParent = true
+			return "_parent"
 		}
 		switch v.Type.Kind {
 		case engine.ParamKind:
@@ -568,10 +580,13 @@ func (e *Emitter) isValidEndianType(t types.Type) bool {
 	}
 }
 
-func (e *Emitter) setParams(struc string, tr *types.UserType, resolved *kaitai.Struct, fn *goFunc) {
-	for i := range tr.Params {
-		field := e.typeName(resolved.Params[i].ID)
-		fn.printf("%s.%s = %s", struc, field, e.expr(tr.Params[i]))
+func (e *Emitter) setParams(struc string, rt types.TypeRef, resolved *engine.ExprType, fn *goFunc) {
+	fn.printf("%s.Parent_ = this", struc)
+	fn.printf("%s.Root_ = this.Root_", struc)
+
+	for i := range rt.User.Params {
+		field := e.typeName(resolved.Struct.Type.Params[i].ID)
+		fn.printf("%s.%s = %s", struc, field, e.expr(rt.User.Params[i]))
 	}
 }
 
@@ -636,7 +651,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				// Read
 				declType := e.declTypeRef(rt.TypeRef, nil)
 				fn.printf("tmp%d := %s{}", fn.tmp, declType)
-				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), rt.TypeRef.User, resolved.Struct.Type, fn)
+				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), *rt.TypeRef, resolved, fn)
 				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
@@ -649,7 +664,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				iterCast := e.declType(iterType.Value().Type)
 				fn.printf("for i := %s(0); i < %s; i++ {", iterCast, e.expr(repeat.CountExpr)).indent()
 				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
-				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), rt.TypeRef.User, resolved.Struct.Type, fn)
+				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), *rt.TypeRef, resolved, fn)
 				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
@@ -660,7 +675,8 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				oldContext := e.context
 				e.context = e.context.WithTemporary(engine.NewAliasSymbol(typ, engine.NewAttrValue(typ, nil), fmt.Sprintf("tmp%d", fn.tmp)))
 				fn.printf("for {").indent()
-				fn.printf("var tmp%d %s", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
+				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
+				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), *rt.TypeRef, resolved, fn)
 				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
@@ -673,7 +689,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 
 			case nil:
 				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
-				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), rt.TypeRef.User, resolved.Struct.Type, fn)
+				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), *rt.TypeRef, resolved, fn)
 				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
@@ -837,7 +853,7 @@ func (e *Emitter) typeSwitchStruct(unit *goUnit, typ *engine.ExprType) {
 	}
 }
 
-func (e *Emitter) typeSwitch(unit *goUnit, val *engine.ExprValue, forceEndian types.EndianKind) {
+func (e *Emitter) typeSwitch(unit *goUnit, gs *goStruct, val *engine.ExprValue, forceEndian types.EndianKind) {
 	attr := val.Type.Attr
 	oldEndian := e.endian
 	endianSuffix := ""
@@ -879,12 +895,16 @@ func (e *Emitter) typeSwitch(unit *goUnit, val *engine.ExprValue, forceEndian ty
 			}
 			readFn.printf("case (%s)(%s):", typeCast, goValue).indent()
 			readFn.printf("tmp%d := %s{}", readFn.tmp, goUnderlyingType)
-			e.setParams(fmt.Sprintf("tmp%d", readFn.tmp), typ.User, resolved.Struct.Type, &readFn)
+			e.setParams(fmt.Sprintf("tmp%d", readFn.tmp), typ, resolved, &readFn)
 			readFn.printf("if err := tmp%d.Read(io); err != nil {", readFn.tmp).indent()
 			readFn.printf("return err")
 			readFn.unindent().printf("}")
 
-			readFn.printf("this.%s = %s{Value: tmp%d}", fieldName, caseStruct, readFn.tmp)
+			if attr.Repeat == nil {
+				readFn.printf("this.%s = %s{Value: tmp%d}", fieldName, caseStruct, readFn.tmp)
+			} else {
+				readFn.printf("this.%s = append(this.%s, %s{Value: tmp%d})", fieldName, fieldName, caseStruct, readFn.tmp)
+			}
 			readFn.unindent()
 
 		default:
@@ -895,7 +915,11 @@ func (e *Emitter) typeSwitch(unit *goUnit, val *engine.ExprValue, forceEndian ty
 			readFn.printf("if err != nil {").indent()
 			readFn.printf("\treturn err")
 			readFn.unindent().printf("}")
-			readFn.printf("this.%s = %s{Value: tmp%d}", fieldName, caseStruct, readFn.tmp)
+			if attr.Repeat == nil {
+				readFn.printf("this.%s = %s{Value: tmp%d}", fieldName, caseStruct, readFn.tmp)
+			} else {
+				readFn.printf("this.%s = append(this.%s, %s{Value: tmp%d})", fieldName, fieldName, caseStruct, readFn.tmp)
+			}
 			readFn.unindent()
 		}
 	}
@@ -903,6 +927,7 @@ func (e *Emitter) typeSwitch(unit *goUnit, val *engine.ExprValue, forceEndian ty
 	readFn.printf("}")
 	readFn.printf("return nil")
 
+	e.ensureStructLinks(&readFn, val)
 	unit.methods = append(unit.methods, readFn)
 }
 
@@ -947,7 +972,8 @@ func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, val *engine.ExprValue, f
 	defer func() {
 		e.endian = oldEndian
 	}()
-
+	e.needParent = false
+	e.needRoot = false
 	e.setImport(unit, kaitaiRuntimePackagePath, kaitaiRuntimePackageName)
 	readMethod := goFunc{
 		recv: goVar{name: "this", typ: "*" + gs.name},
@@ -955,6 +981,9 @@ func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, val *engine.ExprValue, f
 		in:   []goVar{{name: "io", typ: "*" + kaitaiStream}},
 		out:  []goVar{{name: "err", typ: "error"}},
 	}
+	readMethod.printf("if this.Root_ == nil {").indent()
+	readMethod.printf("this.Root_ = this").unindent()
+	readMethod.printf("}")
 	errExit := false
 	for _, attr := range val.Struct.Attrs {
 		if !e.readAttr(unit, &readMethod, attr.Type, forceEndian) {
@@ -966,7 +995,29 @@ func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, val *engine.ExprValue, f
 	if !errExit {
 		readMethod.printf("return nil")
 	}
+	e.ensureStructLinks(&readMethod, val)
 	unit.methods = append(unit.methods, readMethod)
+}
+
+func (e *Emitter) ensureStructLinks(fn *goFunc, val *engine.ExprValue) {
+	// TODO: technically the parent/root link is supposed to be dynamic.
+	// However this is pretty hard to implement in a statically-typed language.
+	// It might not be possible to implement exactly correctly.
+	if e.needParent {
+		parentVal := val
+		if parentVal.Parent != nil {
+			fn.preprintf("if this.Parent_ != nil {\n\t\t_parent, _ = this.Parent_.(*%s)\n\t}", e.declType(parentVal.Type))
+			fn.preprintf("var _parent *%s", e.declType(parentVal.Type))
+		}
+	}
+	if e.needRoot {
+		rootVal := val
+		for rootVal.Parent != nil {
+			rootVal = rootVal.Parent
+		}
+		fn.preprintf("if this.Root_ != nil {\n\t\t_root, _ = this.Root_.(*%s)\n\t}", e.declType(rootVal.Type))
+		fn.preprintf("var _root *%s", e.declType(rootVal.Type))
+	}
 }
 
 func (e *Emitter) endianStubs(unit *goUnit, gs *goStruct, ks *kaitai.Struct) {
@@ -1064,8 +1115,14 @@ func (e *Emitter) struc(inputname string, unit *goUnit, val *engine.ExprValue) {
 			typ:  e.declType(attr.Type),
 		})
 	}
-
-	unit.structs = append(unit.structs, gs)
+	gs.fields = append(gs.fields, goVar{
+		name: "Root_",
+		typ:  "any",
+	})
+	gs.fields = append(gs.fields, goVar{
+		name: "Parent_",
+		typ:  "any",
+	})
 
 	// Deserialization
 	if e.endian == types.SwitchEndian || (e.needMultipleEndian(ks) && e.endian == types.UnspecifiedOrder) {
@@ -1081,8 +1138,8 @@ func (e *Emitter) struc(inputname string, unit *goUnit, val *engine.ExprValue) {
 		for _, attr := range val.Struct.Attrs {
 			if attr.Type.Attr.Type.TypeSwitch != nil {
 				e.typeSwitchStruct(unit, attr.Type)
-				e.typeSwitch(unit, attr, types.LittleEndian)
-				e.typeSwitch(unit, attr, types.BigEndian)
+				e.typeSwitch(unit, &gs, attr, types.LittleEndian)
+				e.typeSwitch(unit, &gs, attr, types.BigEndian)
 			}
 		}
 	} else {
@@ -1093,10 +1150,12 @@ func (e *Emitter) struc(inputname string, unit *goUnit, val *engine.ExprValue) {
 		for _, attr := range val.Struct.Attrs {
 			if attr.Type.Attr.Type.TypeSwitch != nil {
 				e.typeSwitchStruct(unit, attr.Type)
-				e.typeSwitch(unit, attr, types.UnspecifiedOrder)
+				e.typeSwitch(unit, &gs, attr, types.UnspecifiedOrder)
 			}
 		}
 	}
+
+	unit.structs = append(unit.structs, gs)
 }
 
 type goVar struct {
@@ -1178,6 +1237,11 @@ type goFunc struct {
 
 func (g *goFunc) emit(buf io.Writer) {
 	fmt.Fprintf(buf, "func (%s) %s(%s) (%s) {\n%s}\n\n", g.recv.String(), g.name, g.in.String(), g.out.String(), g.source)
+}
+
+func (g *goFunc) preprintf(format string, args ...any) *goFunc {
+	g.source = "\t" + g.pfx + fmt.Sprintf(format, args...) + "\n" + g.source
+	return g
 }
 
 func (g *goFunc) printf(format string, args ...any) *goFunc {

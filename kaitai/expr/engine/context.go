@@ -894,6 +894,14 @@ func (context *Context) ResolveIntrinsic(name string) *ExprValue {
 	return nil
 }
 
+func (context *Context) RootValue() *ExprValue {
+	return context.module
+}
+
+func (context *Context) ParentValue() *ExprValue {
+	return context.local
+}
+
 func (context *Context) ResolveLocalType(name string) *ExprType {
 	typ := context.local.Type.Child(name)
 	if typ != nil {

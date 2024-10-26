@@ -26,7 +26,7 @@ Here are some of the features that do work:
 - ✅ Parameters
 - ✅ Expressions
   + ✅ All unary and binary operators
-  + ⚠️ **Limited support for field access.** Navigating the parent and root struct is unsupported.
+  + ⚠️ Partial support for struct navigation.
   + ⚠️ **In addition, some special variables are not implemented.**
   + ⚠️ **Ternary operator is not supported yet.**
   + ⚠️ **Operator precedence may differ from Kaitai Struct.** The operator precedence of Kaitai Struct expressions is not specified yet.
