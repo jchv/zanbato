@@ -38,9 +38,14 @@ import (
 type Attrs struct {
 	Magic []byte
 	Count int64
+	Root_ any
+	Parent_ any
 }
 
 func (this *Attrs) Read(io *kaitai.Stream) (err error) {
+	if this.Root_ == nil {
+		this.Root_ = this
+	}
 	tmp1, err := io.ReadBytes(int(4))
 	if err != nil {
 		return err
@@ -89,9 +94,14 @@ import (
 type Expr struct {
 	A int16
 	B []byte
+	Root_ any
+	Parent_ any
 }
 
 func (this *Expr) Read(io *kaitai.Stream) (err error) {
+	if this.Root_ == nil {
+		this.Root_ = this
+	}
 	tmp1, err := io.ReadS2le()
 	if err != nil {
 		return err
