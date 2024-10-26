@@ -981,9 +981,6 @@ func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, val *engine.ExprValue, f
 		in:   []goVar{{name: "io", typ: "*" + kaitaiStream}},
 		out:  []goVar{{name: "err", typ: "error"}},
 	}
-	readMethod.printf("if this.Root_ == nil {").indent()
-	readMethod.printf("this.Root_ = this").unindent()
-	readMethod.printf("}")
 	errExit := false
 	for _, attr := range val.Struct.Attrs {
 		if !e.readAttr(unit, &readMethod, attr.Type, forceEndian) {
@@ -996,6 +993,7 @@ func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, val *engine.ExprValue, f
 		readMethod.printf("return nil")
 	}
 	e.ensureStructLinks(&readMethod, val)
+	readMethod.preprintf("if this.Root_ == nil {\n\t\tthis.Root_ = this\n\t}")
 	unit.methods = append(unit.methods, readMethod)
 }
 
