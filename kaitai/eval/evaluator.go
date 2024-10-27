@@ -19,6 +19,7 @@ type Evaluator struct {
 	context     *engine.EvalContext
 	annotations []Annotation
 	endian      types.EndianKind
+	path        []PathItem
 }
 
 // NewEvaluator constructs a new evaluator.
@@ -70,7 +71,7 @@ func (e *Evaluator) root(s *kaitai.Struct) {
 	e.context.AddGlobalType(string(s.ID), root.Type)
 	e.context.AddModuleType(string(s.ID), root.Type)
 	oldContext := e.context.Context
-	e.context.SetContext(e.context.WithModuleRoot(root).WithLocalRoot(root))
+	e.context.SetContext(e.context.WithModuleRoot(root).WithLocalRoot(root).WithStream(engine.NewRuntimeStreamValue(e.stream)))
 
 	e.struc(root)
 
@@ -84,7 +85,12 @@ func (e *Evaluator) struc(val *engine.ExprValue) {
 	e.context.SetContext(e.context.WithLocalRoot(val))
 	e.context.PushStack()
 	for _, attrVal := range val.Struct.Attrs {
+		oldPath := e.path
+		e.path = append(e.path, PathItem{
+			Name: string(attrVal.Type.Attr.ID),
+		})
 		e.attr(attrVal)
+		e.path = oldPath
 	}
 	e.context.PopStack()
 	e.context.SetContext(oldContext)
@@ -133,15 +139,15 @@ func (e *Evaluator) attr(val *engine.ExprValue) {
 				if resolved.Kind != engine.StructKind {
 					panic(fmt.Errorf("expression %q yielded unexpected type %s (expected struct)", typ.User.Name, resolved.Kind))
 				}
-				e.readOne(val, &typ, 0)
+				e.readOne(val, &typ, -1)
 
 			default:
 				rt := typ.FoldEndian(e.endian)
-				e.readOne(val, &rt, 0)
+				e.readOne(val, &rt, -1)
 			}
 		}
 	} else if attr.Repeat == nil {
-		attrVal := e.readOne(val, rt.TypeRef, 0)
+		attrVal := e.readOne(val, rt.TypeRef, -1)
 		e.context.PutStack(val, attrVal)
 	} else {
 		attrVal := []*engine.ExprValue{}
@@ -191,16 +197,64 @@ func (e *Evaluator) attr(val *engine.ExprValue) {
 	}
 }
 
+func (e *Evaluator) valueOf(value any) *engine.ExprValue {
+	switch t := value.(type) {
+	case int:
+		return engine.NewIntegerLiteralValue(big.NewInt(0).SetInt64(int64(t)))
+	case int8:
+		return engine.NewIntegerLiteralValue(big.NewInt(0).SetInt64(int64(t)))
+	case int16:
+		return engine.NewIntegerLiteralValue(big.NewInt(0).SetInt64(int64(t)))
+	case int32:
+		return engine.NewIntegerLiteralValue(big.NewInt(0).SetInt64(int64(t)))
+	case int64:
+		return engine.NewIntegerLiteralValue(big.NewInt(0).SetInt64(int64(t)))
+	case uint:
+		return engine.NewIntegerLiteralValue(big.NewInt(0).SetUint64(uint64(t)))
+	case uint8:
+		return engine.NewIntegerLiteralValue(big.NewInt(0).SetUint64(uint64(t)))
+	case uint16:
+		return engine.NewIntegerLiteralValue(big.NewInt(0).SetUint64(uint64(t)))
+	case uint32:
+		return engine.NewIntegerLiteralValue(big.NewInt(0).SetUint64(uint64(t)))
+	case uint64:
+		return engine.NewIntegerLiteralValue(big.NewInt(0).SetUint64(uint64(t)))
+	case float32:
+		return engine.NewFloatLiteralValue(big.NewFloat(float64(t)))
+	case float64:
+		return engine.NewFloatLiteralValue(big.NewFloat(float64(t)))
+	case []byte:
+		return engine.NewByteArrayLiteralValue(t)
+	case string:
+		value = engine.NewStringLiteralValue(t)
+	}
+	return nil
+}
+
 func (e *Evaluator) readOne(attr *engine.ExprValue, n *types.TypeRef, index int) *engine.ExprValue {
-	var value *engine.ExprValue
+	var value any
 	startOffset, err := e.stream.Seek(0, io.SeekCurrent)
 	if err != nil {
 		panic(fmt.Errorf("getting initial offset of span: %w", err))
 	}
+	oldPath := e.path
+	if index >= 0 {
+		item := PathItem{
+			Name:  e.path[len(e.path)-1].Name,
+			Index: new(int),
+		}
+		*item.Index = index
+		e.path = append(e.path[:len(e.path)-1], item)
+	}
+	path := e.path
 	defer func() {
+		e.path = oldPath
 		endOffset, err := e.stream.Seek(0, io.SeekCurrent)
 		if err != nil {
 			panic(fmt.Errorf("getting end offset of span: %w", err))
+		}
+		if value == nil {
+			return
 		}
 		annotation := Annotation{
 			Range: Range{
@@ -208,9 +262,8 @@ func (e *Evaluator) readOne(attr *engine.ExprValue, n *types.TypeRef, index int)
 				EndIndex:   uint64(endOffset),
 			},
 			Label: Label{
-				Attr:  attr,
+				Attr:  path,
 				Value: value,
-				Index: index,
 			},
 		}
 		e.annotations = append(e.annotations, annotation)
@@ -227,85 +280,85 @@ func (e *Evaluator) readOne(attr *engine.ExprValue, n *types.TypeRef, index int)
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetUint64(uint64(u1)))
+		value = u1
 	case types.U2le:
 		u2, err := e.stream.ReadU2le()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetUint64(uint64(u2)))
+		value = u2
 	case types.U2be:
 		u2, err := e.stream.ReadU2be()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetUint64(uint64(u2)))
+		value = u2
 	case types.U4le:
 		u4, err := e.stream.ReadU4le()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetUint64(uint64(u4)))
+		value = u4
 	case types.U4be:
 		u4, err := e.stream.ReadU4be()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetUint64(uint64(u4)))
+		value = u4
 	case types.U8le:
 		u8, err := e.stream.ReadU8le()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetUint64(u8))
+		value = u8
 	case types.U8be:
 		u8, err := e.stream.ReadU8be()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetUint64(u8))
+		value = u8
 	case types.S1:
 		s1, err := e.stream.ReadS1()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetInt64(int64(s1)))
+		value = s1
 	case types.S2le:
 		s2, err := e.stream.ReadS2le()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetInt64(int64(s2)))
+		value = s2
 	case types.S2be:
 		s2, err := e.stream.ReadS2be()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetInt64(int64(s2)))
+		value = s2
 	case types.S4le:
 		s4, err := e.stream.ReadS4le()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetInt64(int64(s4)))
+		value = s4
 	case types.S4be:
 		s4, err := e.stream.ReadS4be()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetInt64(int64(s4)))
+		value = s4
 	case types.S8le:
 		s8, err := e.stream.ReadS8le()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetInt64(s8))
+		value = s8
 	case types.S8be:
 		s8, err := e.stream.ReadS8be()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewIntegerLiteralValue(big.NewInt(0).SetInt64(s8))
+		value = s8
 	case types.Bits:
 		panic("not implemented yet: bits")
 	case types.F4le:
@@ -313,25 +366,25 @@ func (e *Evaluator) readOne(attr *engine.ExprValue, n *types.TypeRef, index int)
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewFloatLiteralValue(big.NewFloat(float64(f4)))
+		value = f4
 	case types.F4be:
 		f4, err := e.stream.ReadF4be()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewFloatLiteralValue(big.NewFloat(float64(f4)))
+		value = f4
 	case types.F8le:
 		f8, err := e.stream.ReadF8le()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewFloatLiteralValue(big.NewFloat(f8))
+		value = f8
 	case types.F8be:
 		f8, err := e.stream.ReadF8be()
 		if err != nil {
 			panic(err)
 		}
-		value = engine.NewFloatLiteralValue(big.NewFloat(f8))
+		value = f8
 	case types.Bytes:
 		var data []byte
 		if n.Bytes.Size != nil {
@@ -346,13 +399,13 @@ func (e *Evaluator) readOne(attr *engine.ExprValue, n *types.TypeRef, index int)
 			if err != nil {
 				panic(err)
 			}
-			value = engine.NewByteArrayLiteralValue(data)
+			value = data
 		} else if n.Bytes.SizeEOS {
 			data, err = e.stream.ReadBytesFull()
 			if err != nil {
 				panic(err)
 			}
-			value = engine.NewByteArrayLiteralValue(data)
+			value = data
 		} else {
 			panic("not implemented yet: bytes")
 		}
@@ -367,7 +420,7 @@ func (e *Evaluator) readOne(attr *engine.ExprValue, n *types.TypeRef, index int)
 			if err != nil {
 				panic(err)
 			}
-			value = engine.NewStringLiteralValue(str)
+			value = str
 		} else if n.String.Size != nil {
 			sizeVal, err := engine.Evaluate(e.context, n.String.Size)
 			if err != nil {
@@ -381,13 +434,13 @@ func (e *Evaluator) readOne(attr *engine.ExprValue, n *types.TypeRef, index int)
 				if err != nil {
 					panic(err)
 				}
-				value = engine.NewStringLiteralValue(string(bytes))
+				value = bytes
 			} else {
 				bytes, err := e.stream.ReadBytesPadTerm(int(sizeVal.Integer.Value.Int64()), byte(n.String.Terminator), byte(n.String.Terminator), n.String.Include)
 				if err != nil {
 					panic(err)
 				}
-				value = engine.NewStringLiteralValue(string(bytes))
+				value = bytes
 			}
 		} else {
 			if n.String.Terminator == -1 {
@@ -397,18 +450,44 @@ func (e *Evaluator) readOne(attr *engine.ExprValue, n *types.TypeRef, index int)
 			if err != nil {
 				panic(err)
 			}
-			value = engine.NewByteArrayLiteralValue(bytes)
+			value = bytes
 		}
 	case types.User:
 		resolved := e.resolveType(n.User.Name)
 		if resolved.Kind != engine.StructKind {
 			panic(fmt.Errorf("expression %q yielded unexpected type %s (expected struct)", n.User.Name, resolved.Kind))
 		}
-		e.struc(engine.NewStructValueSymbol(resolved, attr.Parent))
+		struc := engine.NewStructValueSymbol(resolved, attr.Parent)
+		oldStream := e.stream
+		oldContext := e.context.Context
+		// TODO: is this right? Check upstream. Documentation unclear.
+		if n.User.Size != nil {
+			sizeVal, err := engine.Evaluate(e.context, n.User.Size)
+			if err != nil {
+				panic(err)
+			}
+			if sizeVal.Type.Kind != engine.IntegerKind {
+				panic(fmt.Errorf("expression %q yielded unexpected type %s (expected integer)", n.User.Name, sizeVal.Type.Kind))
+			}
+			size := sizeVal.Integer.Value.Int64()
+			offset, err := e.stream.ReadSeeker.Seek(0, io.SeekCurrent)
+			if err != nil {
+				panic(err)
+			}
+			if _, err := e.stream.ReadSeeker.Seek(size, io.SeekCurrent); err != nil {
+				panic(err)
+			}
+			e.stream = NewSubStream(e.stream, offset, size)
+			e.context.SetContext(e.context.Context.WithStream(engine.NewRuntimeStreamValue(e.stream)))
+		}
+		e.struc(struc)
+		e.stream = oldStream
+		e.context.SetContext(oldContext)
+		return struc
 	default:
 		panic("unexpected typekind: " + n.Kind.String())
 	}
-	return value
+	return e.valueOf(value)
 }
 
 func (e *Evaluator) resolveType(ex string) *engine.ExprType {

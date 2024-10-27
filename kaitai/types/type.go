@@ -193,6 +193,7 @@ type StringType struct {
 type UserType struct {
 	Name   string
 	Params []*expr.Expr
+	Size   *expr.Expr
 }
 
 // TypeSwitch contains a set of possible types.
@@ -399,7 +400,7 @@ func ParseAttrType(attr ksy.AttributeSpec, instance bool) (Type, error) {
 			case String:
 				typ.String.Size = sizeExpr
 			default:
-				return Type{}, fmt.Errorf("size on type %s not supported", typ.Kind)
+				typ.User.Size = sizeExpr
 			}
 		}
 

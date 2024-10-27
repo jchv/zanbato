@@ -102,15 +102,27 @@ func builtinMethodBoolToInt(this *ExprValue, args []*ExprValue) (*ExprValue, err
 }
 
 func builtinMethodStreamEOF(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	return nil, errors.New("not implemented")
+	retVal, err := this.Stream.Stream.EOF()
+	if err != nil {
+		return nil, err
+	}
+	return NewBooleanLiteralValue(retVal), nil
 }
 
 func builtinMethodStreamSize(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	return nil, errors.New("not implemented")
+	retVal, err := this.Stream.Stream.Size()
+	if err != nil {
+		return nil, err
+	}
+	return NewIntegerLiteralValue(big.NewInt(retVal)), nil
 }
 
 func builtinMethodStreamPos(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	return nil, errors.New("not implemented")
+	retVal, err := this.Stream.Stream.Pos()
+	if err != nil {
+		return nil, err
+	}
+	return NewIntegerLiteralValue(big.NewInt(retVal)), nil
 }
 
 func builtinMethodArrayFirst(this *ExprValue, args []*ExprValue) (*ExprValue, error) {

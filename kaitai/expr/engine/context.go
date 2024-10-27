@@ -5,6 +5,8 @@ import (
 
 	"github.com/jchv/zanbato/kaitai"
 	"github.com/jchv/zanbato/kaitai/types"
+
+	kaitai_io "github.com/kaitai-io/kaitai_struct_go_runtime/kaitai"
 )
 
 //go:generate go run golang.org/x/tools/cmd/stringer -type=BuiltinMethod,ExprKind -output context_string.go
@@ -235,6 +237,10 @@ type StructData struct {
 	Instances []*ExprValue
 }
 
+type StreamData struct {
+	Stream *kaitai_io.Stream
+}
+
 type ExprKind int
 
 const (
@@ -293,6 +299,7 @@ type ExprValue struct {
 	ByteArray *ByteArrayData
 	String    *StringData
 	Struct    *StructData
+	Stream    *StreamData
 }
 
 // NewTypeRoot creates a new type root.
@@ -398,6 +405,19 @@ func NewStreamValue() *ExprValue {
 	return &ExprValue{
 		Type: &ExprType{
 			Kind: StreamKind,
+		},
+		Children: StreamSymbolTable,
+	}
+}
+
+// NewRuntimeStreamValue creates a runtime stream intrinsic.
+func NewRuntimeStreamValue(stream *kaitai_io.Stream) *ExprValue {
+	return &ExprValue{
+		Type: &ExprType{
+			Kind: StreamKind,
+		},
+		Stream: &StreamData{
+			Stream: stream,
 		},
 		Children: StreamSymbolTable,
 	}
@@ -877,6 +897,16 @@ func (context *Context) WithTemporary(symbol *ExprValue) *Context {
 	}
 }
 
+func (context *Context) WithStream(stream *ExprValue) *Context {
+	return &Context{
+		global: context.global,
+		module: context.module,
+		local:  context.local,
+		stream: stream,
+		tmp:    context.tmp,
+	}
+}
+
 func (context *Context) ResolveIntrinsic(name string) *ExprValue {
 	switch name {
 	case "_root":
@@ -900,6 +930,10 @@ func (context *Context) RootValue() *ExprValue {
 
 func (context *Context) ParentValue() *ExprValue {
 	return context.local
+}
+
+func (context *Context) StreamValue() *ExprValue {
+	return context.stream
 }
 
 func (context *Context) ResolveLocalType(name string) *ExprType {

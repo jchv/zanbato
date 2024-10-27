@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -310,6 +311,12 @@ func Compare(a *ExprValue, b *ExprValue, maskCheck CompareMask) (bool, error) {
 		maskResult = cmpResultToMode(a.Float.Value.Cmp(&promotedB))
 	case a.Type.Kind == StringKind && b.Type.Kind == StringKind:
 		maskResult = cmpResultToMode(strings.Compare(a.String.Value, b.String.Value))
+	case a.Type.Kind == ByteArrayKind && b.Type.Kind == ByteArrayKind:
+		maskResult = cmpResultToMode(bytes.Compare(a.ByteArray.Value, b.ByteArray.Value))
+	case a.Type.Kind == StringKind && b.Type.Kind == ByteArrayKind:
+		maskResult = cmpResultToMode(bytes.Compare([]byte(a.String.Value), b.ByteArray.Value))
+	case a.Type.Kind == ByteArrayKind && b.Type.Kind == StringKind:
+		maskResult = cmpResultToMode(bytes.Compare(a.ByteArray.Value, []byte(b.String.Value)))
 	case a.Type.Kind == BooleanKind && b.Type.Kind == BooleanKind:
 		// TODO: cast to bool?
 		if maskCheck == CompareEqual {

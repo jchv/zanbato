@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"log"
 	"os"
@@ -33,5 +34,8 @@ func main() {
 	stream := eval.NewStream(f)
 	evaluator := eval.NewEvaluator(resolver, stream)
 	annotations := evaluator.Evaluate(basename, struc)
-	log.Printf("%#v\n", annotations)
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "\t")
+	enc.SetEscapeHTML(false)
+	enc.Encode(annotations)
 }

@@ -319,8 +319,7 @@ func (e *Emitter) exprPromotionBinaryNode(n expr.BinaryNode) string {
 		expr.OpLessThan, expr.OpLessThanEqual,
 		expr.OpGreaterThan, expr.OpGreaterThanEqual,
 		expr.OpEqual, expr.OpNotEqual,
-		expr.OpBitAnd, expr.OpBitOr, expr.OpBitXor,
-		expr.OpLogicalAnd, expr.OpLogicalOr:
+		expr.OpBitAnd, expr.OpBitOr, expr.OpBitXor:
 		return e.calcPromotionNode(n.A, n.B)
 
 	default:
@@ -342,49 +341,52 @@ func (e *Emitter) exprTernaryNode(t expr.TernaryNode) string {
 
 func (e *Emitter) exprBinaryNode(t expr.BinaryNode) string {
 	cast := e.exprPromotionBinaryNode(t)
+	if cast != "" {
+		cast = "(" + cast + ")"
+	}
 	switch t.Op {
 	case expr.OpAdd:
-		return fmt.Sprintf("(%s)(%s) + (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) + %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpSub:
-		return fmt.Sprintf("(%s)(%s) - (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) - %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpMult:
-		return fmt.Sprintf("(%s)(%s) * (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) * %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpDiv:
-		return fmt.Sprintf("(%s)(%s) / (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) / %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpMod:
-		return fmt.Sprintf("(%s)(%s) %% (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) %% %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpLessThan:
-		return fmt.Sprintf("(%s)(%s) < (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) < %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpLessThanEqual:
-		return fmt.Sprintf("(%s)(%s) <= (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) <= %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpGreaterThan:
-		return fmt.Sprintf("(%s)(%s) > (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) > %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpGreaterThanEqual:
-		return fmt.Sprintf("(%s)(%s) >= (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) >= %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpEqual:
-		return fmt.Sprintf("(%s)(%s) == (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) == %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpNotEqual:
-		return fmt.Sprintf("(%s)(%s) != (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) != %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpShiftLeft:
-		return fmt.Sprintf("(%s)(%s) << (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) << %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpShiftRight:
-		return fmt.Sprintf("(%s)(%s) >> (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) >> %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpBitAnd:
-		return fmt.Sprintf("(%s)(%s) & (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) & %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpBitOr:
-		return fmt.Sprintf("(%s)(%s) | (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) | %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpBitXor:
-		return fmt.Sprintf("(%s)(%s) ^ (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) ^ %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpLogicalAnd:
-		return fmt.Sprintf("(%s)(%s) && (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) && %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	case expr.OpLogicalOr:
-		return fmt.Sprintf("(%s)(%s) || (%s)(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
+		return fmt.Sprintf("%s(%s) || %s(%s)", cast, e.exprNode(t.A), cast, e.exprNode(t.B))
 	default:
 		panic(fmt.Errorf("unsupported binary op %s", t.Op))
 	}
 }
 
-func (e *Emitter) exprNodeNested(node expr.Node) string {
+func (e *Emitter) exprNode(node expr.Node) string {
 	switch t := node.(type) {
 	case expr.UnaryNode:
 		switch t.Op {
@@ -399,60 +401,13 @@ func (e *Emitter) exprNodeNested(node expr.Node) string {
 		case nil:
 			panic(fmt.Errorf("unable to use nested ident subexpression %s as value", t))
 		case e.context.RootValue():
-			// TODO: need to handle populating _root
 			e.needRoot = true
 			return "_root"
 		case e.context.ParentValue():
-			// TODO: need to handle populating _parent
 			e.needParent = true
 			return "_parent"
-		}
-		switch v.Type.Kind {
-		case engine.ParamKind:
-			return e.fieldName(v.Type.Param.ID)
-		case engine.AttrKind:
-			return e.fieldName(v.Type.Attr.ID)
-		case engine.AliasKind:
-			return v.Type.Alias.Target
-		default:
-			panic(fmt.Errorf("unsupported value type reference %s in nested ident subexpression %s", v.Type.Kind, t))
-		}
-	case expr.ScopeNode:
-		panic(fmt.Errorf("unexpected nested scoped expression in %s", t))
-	case expr.MemberNode:
-		v := engine.ResultTypeOfNode(e.context, t).Value()
-		if v == nil {
-			panic(fmt.Errorf("unable to use nested member subexpression %s as value", t))
-		}
-		switch v.Type.Kind {
-		case engine.ParamKind:
-			return fmt.Sprintf("%s.%s", e.exprNodeNested(t.Operand), e.fieldName(v.Type.Param.ID))
-		case engine.AttrKind:
-			return fmt.Sprintf("%s.%s", e.exprNodeNested(t.Operand), e.fieldName(v.Type.Attr.ID))
-		default:
-			panic(fmt.Errorf("unsupported value type reference %s in nested member subexpression %s", v.Type.Kind, t))
-		}
-	case expr.IntNode:
-		return t.Integer.String()
-	case expr.BoolNode:
-		return t.String()
-	case expr.BinaryNode:
-		return e.exprBinaryNode(t)
-	case expr.TernaryNode:
-		return e.exprTernaryNode(t)
-	case expr.StringNode:
-		return strconv.Quote(t.Str)
-	default:
-		panic(fmt.Errorf("unsupported expression node %T", t))
-	}
-}
-
-func (e *Emitter) exprNode(node expr.Node) string {
-	switch t := node.(type) {
-	case expr.IdentNode:
-		v := engine.ResultTypeOfNode(e.context, t).Value()
-		if v == nil {
-			panic(fmt.Errorf("unable to use primary ident expression %s as value", t))
+		case e.context.StreamValue():
+			return "io"
 		}
 		switch v.Type.Kind {
 		case engine.ParamKind:
@@ -479,8 +434,39 @@ func (e *Emitter) exprNode(node expr.Node) string {
 		default:
 			panic(fmt.Errorf("unsupported value type reference %s in scope subexpression %s", v.Type.Kind, t))
 		}
+	case expr.MemberNode:
+		switch t.Property {
+		case "_root":
+			return fmt.Sprintf("%s.Root_", e.exprNode(t.Operand))
+		case "_parent":
+			return fmt.Sprintf("%s.Parent_", e.exprNode(t.Operand))
+		case "_io":
+			return fmt.Sprintf("%s.IO_", e.exprNode(t.Operand))
+		}
+		v := engine.ResultTypeOfNode(e.context, t).Value()
+		if v == nil {
+			panic(fmt.Errorf("unable to use nested member subexpression %s as value", t))
+		}
+		switch v.Type.Kind {
+		case engine.ParamKind:
+			return fmt.Sprintf("%s.%s", e.exprNode(t.Operand), e.fieldName(v.Type.Param.ID))
+		case engine.AttrKind:
+			return fmt.Sprintf("%s.%s", e.exprNode(t.Operand), e.fieldName(v.Type.Attr.ID))
+		default:
+			panic(fmt.Errorf("unsupported value type reference %s in nested member subexpression %s", v.Type.Kind, t))
+		}
+	case expr.IntNode:
+		return t.Integer.String()
+	case expr.BoolNode:
+		return t.String()
+	case expr.BinaryNode:
+		return e.exprBinaryNode(t)
+	case expr.TernaryNode:
+		return e.exprTernaryNode(t)
+	case expr.StringNode:
+		return strconv.Quote(t.Str)
 	default:
-		return e.exprNodeNested(node)
+		panic(fmt.Errorf("unsupported expression node %T", t))
 	}
 }
 
@@ -652,6 +638,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				declType := e.declTypeRef(rt.TypeRef, nil)
 				fn.printf("tmp%d := %s{}", fn.tmp, declType)
 				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), *rt.TypeRef, resolved, fn)
+				// TODO: need to handle substream for user size
 				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
@@ -665,6 +652,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				fn.printf("for i := %s(0); i < %s; i++ {", iterCast, e.expr(repeat.CountExpr)).indent()
 				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
 				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), *rt.TypeRef, resolved, fn)
+				// TODO: need to handle substream for user size
 				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
@@ -677,6 +665,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				fn.printf("for {").indent()
 				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
 				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), *rt.TypeRef, resolved, fn)
+				// TODO: need to handle substream for user size
 				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
@@ -690,6 +679,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 			case nil:
 				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
 				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), *rt.TypeRef, resolved, fn)
+				// TODO: need to handle substream for user size
 				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
@@ -993,6 +983,7 @@ func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, val *engine.ExprValue, f
 		readMethod.printf("return nil")
 	}
 	e.ensureStructLinks(&readMethod, val)
+	readMethod.preprintf("this.IO_ = io")
 	readMethod.preprintf("if this.Root_ == nil {\n\t\tthis.Root_ = this\n\t}")
 	unit.methods = append(unit.methods, readMethod)
 }
@@ -1113,6 +1104,10 @@ func (e *Emitter) struc(inputname string, unit *goUnit, val *engine.ExprValue) {
 			typ:  e.declType(attr.Type),
 		})
 	}
+	gs.fields = append(gs.fields, goVar{
+		name: "IO_",
+		typ:  "*" + kaitaiStream,
+	})
 	gs.fields = append(gs.fields, goVar{
 		name: "Root_",
 		typ:  "any",
