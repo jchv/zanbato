@@ -17,7 +17,7 @@ type TypeSpec struct {
 	Enums     EnumsSpec      `yaml:"enums,omitempty"`
 	Instances InstancesSpec  `yaml:"instances,omitempty"`
 	Doc       string         `yaml:"doc,omitempty"`
-	DocRef    string         `yaml:"doc-ref,omitempty"`
+	DocRef    DocRefSpec     `yaml:"doc-ref,omitempty"`
 }
 
 // TypesSpec represents a list of KaitaiStruct types.

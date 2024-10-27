@@ -5,7 +5,7 @@ package ksy
 type AttributeSpec struct {
 	ID          Identifier   `yaml:"id,omitempty"`
 	Doc         string       `yaml:"doc,omitempty"`
-	DocRef      string       `yaml:"doc-ref,omitempty"`
+	DocRef      DocRefSpec   `yaml:"doc-ref,omitempty"`
 	Contents    ByteSpec     `yaml:"contents,omitempty"`
 	Type        AttrTypeSpec `yaml:"type,omitempty"`
 	Repeat      RepeatSpec   `yaml:"repeat,omitempty"`

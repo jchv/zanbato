@@ -1219,7 +1219,7 @@ func TestFullSchema(t *testing.T) {
 						},
 					},
 				},
-				DocRef: "https://sourceware.org/git/?p=glibc.git;a=blob;f=elf/elf.h;hb=HEAD",
+				DocRef: DocRefSpec{"https://sourceware.org/git/?p=glibc.git;a=blob;f=elf/elf.h;hb=HEAD"},
 			},
 		},
 	}

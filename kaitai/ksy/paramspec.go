@@ -6,7 +6,7 @@ type ParamSpec struct {
 	ID     Identifier `yaml:"id,omitempty"`
 	Type   string     `yaml:"type,omitempty"`
 	Doc    string     `yaml:"doc,omitempty"`
-	DocRef string     `yaml:"doc-ref,omitempty"`
+	DocRef DocRefSpec `yaml:"doc-ref,omitempty"`
 	Enum   string     `yaml:"enum,omitempty"`
 }
 
