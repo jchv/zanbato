@@ -853,7 +853,7 @@ func (e *Emitter) typeSwitchStruct(unit *goUnit, typ *engine.ExprType) {
 	}
 }
 
-func (e *Emitter) typeSwitch(unit *goUnit, gs *goStruct, val *engine.ExprValue, forceEndian types.EndianKind) {
+func (e *Emitter) typeSwitch(unit *goUnit, val *engine.ExprValue, forceEndian types.EndianKind) {
 	attr := val.Type.Attr
 	oldEndian := e.endian
 	endianSuffix := ""
@@ -1136,8 +1136,8 @@ func (e *Emitter) struc(inputname string, unit *goUnit, val *engine.ExprValue) {
 		for _, attr := range val.Struct.Attrs {
 			if attr.Type.Attr.Type.TypeSwitch != nil {
 				e.typeSwitchStruct(unit, attr.Type)
-				e.typeSwitch(unit, &gs, attr, types.LittleEndian)
-				e.typeSwitch(unit, &gs, attr, types.BigEndian)
+				e.typeSwitch(unit, attr, types.LittleEndian)
+				e.typeSwitch(unit, attr, types.BigEndian)
 			}
 		}
 	} else {
@@ -1148,7 +1148,7 @@ func (e *Emitter) struc(inputname string, unit *goUnit, val *engine.ExprValue) {
 		for _, attr := range val.Struct.Attrs {
 			if attr.Type.Attr.Type.TypeSwitch != nil {
 				e.typeSwitchStruct(unit, attr.Type)
-				e.typeSwitch(unit, &gs, attr, types.UnspecifiedOrder)
+				e.typeSwitch(unit, attr, types.UnspecifiedOrder)
 			}
 		}
 	}
