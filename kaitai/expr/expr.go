@@ -157,9 +157,9 @@ func (b BinaryNode) String() string {
 	case OpBitXor:
 		return "(" + b.A.String() + ") ^ (" + b.B.String() + ")"
 	case OpLogicalAnd:
-		return "(" + b.A.String() + ") && (" + b.B.String() + ")"
+		return "(" + b.A.String() + ") and (" + b.B.String() + ")"
 	case OpLogicalOr:
-		return "(" + b.A.String() + ") || (" + b.B.String() + ")"
+		return "(" + b.A.String() + ") or (" + b.B.String() + ")"
 	default:
 		return "(" + b.A.String() + ") !" + b.Op.String() + " (" + b.B.String() + ")"
 	}
@@ -220,6 +220,10 @@ func ParseExpr(src string) (result *Expr, err error) {
 				err = fmt.Errorf("error parsing expression at character %d: %w", p.pos+1, err)
 			} else {
 				panic(r)
+			}
+		} else {
+			if len(p.s) > 0 {
+				err = fmt.Errorf("unparsed expression text: %q", string(p.s))
 			}
 		}
 	}()
@@ -435,7 +439,7 @@ func (p *parser) expr(depth int) Node {
 		}
 	case isnumber(c):
 		n = p.number()
-	case c == '"':
+	case c == '"' || c == '\'':
 		n = p.strlit()
 	case c == '(':
 		p.next()
@@ -573,11 +577,12 @@ func (p *parser) expr(depth int) Node {
 			break
 		}
 		switch p.peek() {
-		case '&':
+		case 'a':
 			p.next()
-			if p.next() != '&' {
-				panic(fmt.Errorf("expected `&`"))
+			if p.peek() != 'n' && p.peek2() != 'd' {
+				panic(fmt.Errorf("expected 'and'"))
 			}
+			p.advance(2)
 			n = BinaryNode{Op: OpLogicalAnd, A: n, B: p.expr(depthCompareExpr)}
 			continue
 		}
@@ -585,10 +590,10 @@ func (p *parser) expr(depth int) Node {
 			break
 		}
 		switch p.peek() {
-		case '|':
+		case 'o':
 			p.next()
-			if p.next() != '|' {
-				panic(fmt.Errorf("expected `|`"))
+			if p.next() != 'r' {
+				panic(fmt.Errorf("expected 'or'"))
 			}
 			n = BinaryNode{Op: OpLogicalOr, A: n, B: p.expr(depthAndExpr)}
 			continue
