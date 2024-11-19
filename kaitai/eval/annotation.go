@@ -16,7 +16,7 @@ type PathItem struct {
 
 type Path []PathItem
 
-func (p Path) MarshalText() (text []byte, err error) {
+func (p Path) String() string {
 	s := strings.Builder{}
 	for i, item := range p {
 		if i > 0 {
@@ -29,7 +29,11 @@ func (p Path) MarshalText() (text []byte, err error) {
 			s.WriteByte(']')
 		}
 	}
-	return []byte(s.String()), nil
+	return s.String()
+}
+
+func (p Path) MarshalText() (text []byte, err error) {
+	return []byte(p.String()), nil
 }
 
 func (p *Path) UnmarshalText(b []byte) error {
