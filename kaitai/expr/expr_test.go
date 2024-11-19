@@ -57,3 +57,20 @@ func TestParseExpr(t *testing.T) {
 		assert.Equal(t, test.Expr, expr)
 	}
 }
+
+func TestParseExprError(t *testing.T) {
+	tests := []struct {
+		Source    string
+		ErrString string
+	}{
+		{
+			Source:    "(x + 1, 1.0)",
+			ErrString: "error parsing expression at character 8: expected ')'",
+		},
+	}
+
+	for _, test := range tests {
+		_, err := ParseExpr(test.Source)
+		assert.EqualError(t, err, test.ErrString)
+	}
+}

@@ -216,8 +216,9 @@ func ParseExpr(src string) (result *Expr, err error) {
 	p := parser{[]rune(src), 0}
 	defer func() {
 		if r := recover(); r != nil {
-			if err, ok := r.(error); ok {
-				err = fmt.Errorf("error parsing expression at character %d: %w", p.pos+1, err)
+			if rErr, ok := r.(error); ok {
+				err = fmt.Errorf("error parsing expression at character %d: %w", p.pos+1, rErr)
+				result = nil
 			} else {
 				panic(r)
 			}
@@ -445,7 +446,7 @@ func (p *parser) expr(depth int) Node {
 		p.next()
 		n = p.expr(0)
 		if p.next() != ')' {
-			panic(fmt.Errorf("expected `)`"))
+			panic(fmt.Errorf("expected ')'"))
 		}
 	}
 	if depth >= depthPrimaryExpr {
@@ -470,7 +471,7 @@ func (p *parser) expr(depth int) Node {
 			p.next()
 			n = SubscriptNode{A: n, B: p.expr(0)}
 			if p.next() != ']' {
-				panic(fmt.Errorf("expected `]`"))
+				panic(fmt.Errorf("expected ']'"))
 			}
 			continue
 		case 0:
@@ -607,7 +608,7 @@ func (p *parser) expr(depth int) Node {
 			a := n
 			b := p.expr(0)
 			if p.next() != ':' {
-				panic(fmt.Errorf("expected `:`"))
+				panic(fmt.Errorf("expected ':'"))
 			}
 			c := p.expr(0)
 			n = TernaryNode{a, b, c}
