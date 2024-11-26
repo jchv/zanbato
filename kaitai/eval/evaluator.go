@@ -62,10 +62,6 @@ func (e *Evaluator) resolveImports(inputname string, s *kaitai.Struct) {
 }
 
 func (e *Evaluator) root(s *kaitai.Struct) {
-	if s.Meta.Endian.Kind != types.UnspecifiedOrder {
-		e.endian = s.Meta.Endian.Kind
-	}
-
 	// Pivot stack to new root
 	root := engine.NewStructValueSymbol(engine.NewStructTypeSymbol(s, nil), nil)
 	e.context.AddGlobalType(string(s.ID), root.Type)
@@ -79,11 +75,38 @@ func (e *Evaluator) root(s *kaitai.Struct) {
 	e.context.SetContext(oldContext)
 }
 
+func (e *Evaluator) setEndian(endian types.Endian) {
+	switch endian.Kind {
+	case types.BigEndian, types.LittleEndian:
+		e.endian = endian.Kind
+	case types.SwitchEndian:
+		switchVal, err := engine.Evaluate(e.context, endian.SwitchOn)
+		if err != nil {
+			panic(err)
+		}
+		for caseEx, endian := range endian.Cases {
+			caseVal, err := engine.Evaluate(e.context, expr.MustParseExpr(caseEx))
+			cmp, err := engine.Compare(switchVal, caseVal, engine.CompareEqual)
+			if err != nil {
+				panic(err)
+			}
+			if cmp {
+				e.endian = endian
+				break
+			}
+		}
+	case types.UnspecifiedOrder:
+		break
+	}
+}
+
 func (e *Evaluator) struc(val *engine.ExprValue) {
 	// TODO: handle params here
 	oldContext := e.context.Context
+	oldEndian := e.endian
 	e.context.SetContext(e.context.WithLocalRoot(val))
 	e.context.PushStack()
+	e.setEndian(val.Type.Struct.Type.Meta.Endian)
 	for _, attrVal := range val.Struct.Attrs {
 		oldPath := e.path
 		e.path = append(e.path, PathItem{
@@ -94,6 +117,7 @@ func (e *Evaluator) struc(val *engine.ExprValue) {
 	}
 	e.context.PopStack()
 	e.context.SetContext(oldContext)
+	e.endian = oldEndian
 }
 
 func (e *Evaluator) attr(val *engine.ExprValue) {
