@@ -74,6 +74,13 @@
           inherit zanbato format;
           default = zanbato;
         };
+        checks = {
+          format = pkgs.runCommandLocal "check-format" { } ''
+            cd ${self}
+            ${pkgs.lib.getExe format} --check
+            touch $out
+          '';
+        };
         devShell = pkgs.mkShell {
           inputsFrom = [ zanbato ];
           nativeBuildInputs = [
