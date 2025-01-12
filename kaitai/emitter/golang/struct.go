@@ -36,6 +36,7 @@ type Emitter struct {
 	bitEndian types.BitEndianKind
 	context   *engine.Context
 	artifacts []emitter.Artifact
+	visited   map[*kaitai.Struct]struct{}
 
 	needRoot   bool
 	needParent bool
@@ -48,6 +49,7 @@ func NewEmitter(pkgpath string, resolver resolve.Resolver) *Emitter {
 		pkgpath:  pkgpath,
 		resolver: resolver,
 		context:  engine.NewContext(),
+		visited:  make(map[*kaitai.Struct]struct{}),
 	}
 }
 
@@ -471,6 +473,11 @@ func (e *Emitter) exprNode(node expr.Node) string {
 }
 
 func (e *Emitter) root(inputname string, s *kaitai.Struct) {
+	if _, ok := e.visited[s]; ok {
+		return
+	}
+	e.visited[s] = struct{}{}
+
 	oldEndian := e.endian
 	oldBitEndian := e.bitEndian
 
