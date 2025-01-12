@@ -140,7 +140,7 @@ func translateEnumSpec(id Identifier, typ ksy.EnumSpec) (*Enum, error) {
 	for _, val := range typ.Values {
 		value := big.NewInt(0)
 		value.SetString(val.Value, 0)
-		result.Values = append(result.Values, EnumValue{value, Identifier(val.ID)})
+		result.Values = append(result.Values, EnumValue{value, Identifier(val.Spec.ID)})
 	}
 	return result, nil
 }

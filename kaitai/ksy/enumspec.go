@@ -4,41 +4,56 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// EnumValueSpec represents a single enum value.
-// #/definitions/EnumSpec
+// EnumValueSpec represents a single enum value spec.
+// #/definitions/EnumValueSpec
 type EnumValueSpec struct {
-	Value string
-	ID    Identifier
+	ID     Identifier
+	Doc    string
+	DocRef DocRefSpec
 }
 
-// EnumValuesSpec represents multiple EnumValueSpec encoded as a map in YAML.
-type EnumValuesSpec []EnumValueSpec
+// EnumValuePairSpec represents a single enum value pair.
+// #/definitions/EnumSpec
+type EnumValuePairSpec struct {
+	Value string
+	Spec  EnumValueSpec
+}
 
-func enumValuesToYAML(e EnumValuesSpec) *yaml.Node {
+// EnumValuePairsSpec represents multiple EnumValueSpec encoded as a map in YAML.
+type EnumValuePairsSpec []EnumValuePairSpec
+
+func enumValuesToYAML(e EnumValuePairsSpec) *yaml.Node {
 	n := &yaml.Node{Kind: yaml.MappingNode}
 	for _, i := range e {
 		n.Content = append(n.Content,
 			&yaml.Node{Kind: yaml.ScalarNode, Value: i.Value},
-			&yaml.Node{Kind: yaml.ScalarNode, Value: string(i.ID), Tag: "!!str"})
+			&yaml.Node{Kind: yaml.ScalarNode, Value: string(i.Spec.ID), Tag: "!!str"})
 	}
 	return n
 }
 
 // MarshalYAML implements yaml.Marshaler
-func (e EnumValuesSpec) MarshalYAML() (interface{}, error) {
+func (e EnumValuePairsSpec) MarshalYAML() (interface{}, error) {
 	return enumValuesToYAML(e), nil
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler
-func (e *EnumValuesSpec) UnmarshalYAML(node *yaml.Node) error {
-	*e = []EnumValueSpec{}
+func (e *EnumValuePairsSpec) UnmarshalYAML(node *yaml.Node) error {
+	*e = []EnumValuePairSpec{}
 	return yamlMapForEach(node, func(key *yaml.Node, value *yaml.Node) error {
-		var item EnumValueSpec
+		var item EnumValuePairSpec
 		if err := key.Decode(&item.Value); err != nil {
 			return err
 		}
-		if err := value.Decode(&item.ID); err != nil {
-			return err
+		switch value.Tag {
+		case "!!map":
+			if err := value.Decode(&item.Spec); err != nil {
+
+			}
+		default:
+			if err := value.Decode(&item.Spec.ID); err != nil {
+				return err
+			}
 		}
 		*e = append(*e, item)
 		return nil
@@ -49,7 +64,7 @@ func (e *EnumValuesSpec) UnmarshalYAML(node *yaml.Node) error {
 // #/definitions/EnumSpec
 type EnumSpec struct {
 	ID     Identifier
-	Values EnumValuesSpec
+	Values EnumValuePairsSpec
 }
 
 // EnumsSpec represents the enumeration list.
