@@ -15,25 +15,35 @@ type Resolver interface {
 }
 
 type fileResolver struct {
-	open func(name string) (io.ReadCloser, error)
+	cache map[string]*kaitai.Struct
+	open  func(name string) (io.ReadCloser, error)
 }
 
 func NewOSResolver() Resolver {
-	return &fileResolver{open: func(name string) (io.ReadCloser, error) {
-		return os.Open(name)
-	}}
+	return &fileResolver{
+		cache: make(map[string]*kaitai.Struct),
+		open: func(name string) (io.ReadCloser, error) {
+			return os.Open(name)
+		},
+	}
 }
 
 func NewFSResolver(fs fs.FS) Resolver {
-	return &fileResolver{open: func(name string) (io.ReadCloser, error) {
-		return fs.Open(name)
-	}}
+	return &fileResolver{
+		cache: make(map[string]*kaitai.Struct),
+		open: func(name string) (io.ReadCloser, error) {
+			return fs.Open(name)
+		},
+	}
 }
 
 func (resolver *fileResolver) Resolve(from, to string) (string, *kaitai.Struct, error) {
 	basename := to
 	if from != "" {
 		basename = path.Join(path.Dir(from), to)
+	}
+	if cachedStruct, ok := resolver.cache[basename]; ok {
+		return basename, cachedStruct, nil
 	}
 	candidates := []string{basename + ".ksy", basename}
 	for _, name := range candidates {
@@ -46,6 +56,7 @@ func (resolver *fileResolver) Resolve(from, to string) (string, *kaitai.Struct, 
 		if err != nil {
 			return "", nil, fmt.Errorf("error loading %q: %w", name, err)
 		}
+		resolver.cache[basename] = struc
 		return basename, struc, nil
 	}
 	return "", nil, fmt.Errorf("failed to load struct %s from %s (checked %v)", to, from, candidates)
