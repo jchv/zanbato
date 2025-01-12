@@ -467,6 +467,24 @@ func (e *Emitter) exprNode(node expr.Node) string {
 		return e.exprTernaryNode(t)
 	case expr.StringNode:
 		return strconv.Quote(t.Str)
+	case expr.ArrayNode:
+		// TODO: this may need to be inferred by the usage
+		typ := "int"
+		if len(t.Items) > 0 {
+			typ = e.declType(engine.ResultTypeOfNode(e.context, t.Items[0]).Type())
+		}
+		b := strings.Builder{}
+		b.WriteString("[]")
+		b.WriteString(typ)
+		b.WriteString("{")
+		for i, item := range t.Items {
+			if i == 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(e.exprNode(item))
+		}
+		b.WriteString("}")
+		return b.String()
 	default:
 		panic(fmt.Errorf("unsupported expression node %T", t))
 	}
