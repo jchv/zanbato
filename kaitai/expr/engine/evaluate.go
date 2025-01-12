@@ -65,6 +65,26 @@ func evalNode(context *EvalContext, node expr.Node) (*ExprValue, error) {
 	case expr.FloatNode:
 		return NewFloatLiteralValue(node.Float), nil
 
+	case expr.ArrayNode:
+		var elemType *ExprType
+		elements := []*ExprValue{}
+		for _, item := range node.Items {
+			element, err := evalNode(context, item)
+			if err != nil {
+				return nil, err
+			}
+			if elemType == nil {
+				elemType = element.Type
+			} else if elemType != nil && elemType != element.Type {
+				return nil, fmt.Errorf("unexpected type mismatch in array element: %s", item.String())
+			}
+			elements = append(elements, element)
+		}
+		if elemType == nil {
+			elemType = IntegerExprType
+		}
+		return NewArrayLiteralValue(NewArrayType(elemType, nil), []*ExprValue{}), nil
+
 	case expr.ScopeNode:
 		op := ResultTypeOfNode(context.Context, node.Operand)
 		if op.typ == nil {

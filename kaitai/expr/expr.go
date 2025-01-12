@@ -97,6 +97,24 @@ func (b BoolNode) String() string {
 	}
 }
 
+// ArrayNode is an array literal.
+type ArrayNode struct{ Items []Node }
+
+func (ArrayNode) isnode() {}
+
+func (a ArrayNode) String() string {
+	b := strings.Builder{}
+	b.WriteByte('[')
+	for i := range a.Items {
+		if i != 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(a.Items[i].String())
+	}
+	b.WriteByte(']')
+	return b.String()
+}
+
 // UnaryNode is a unary operation
 type UnaryNode struct {
 	Operand Node
@@ -400,6 +418,30 @@ func (p *parser) strlit() Node {
 	}
 }
 
+func (p *parser) arraylit() Node {
+	p.advance(1)
+	p.skipwhitespace()
+	an := ArrayNode{}
+	if p.peek() == ']' {
+		p.advance(1)
+		return an
+	}
+	an.Items = []Node{p.expr(0)}
+	for {
+		p.skipwhitespace()
+		switch p.peek() {
+		case ',':
+			p.advance(1)
+			an.Items = append(an.Items, p.expr(0))
+		case ']':
+			p.advance(1)
+			return an
+		default:
+			panic(fmt.Errorf("Expected ',' or ']'"))
+		}
+	}
+}
+
 const (
 	depthTernaryExpr = iota
 	depthOrExpr
@@ -448,6 +490,10 @@ func (p *parser) expr(depth int) Node {
 		if p.next() != ')' {
 			panic(fmt.Errorf("expected ')'"))
 		}
+	case c == '[':
+		n = p.arraylit()
+	default:
+		panic(fmt.Errorf("expected primary expression"))
 	}
 	if depth >= depthPrimaryExpr {
 		return n
