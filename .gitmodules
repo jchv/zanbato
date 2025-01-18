@@ -1,0 +1,3 @@
+[submodule "internal/third_party/kaitai_struct_tests"]
+	path = internal/third_party/kaitai_struct_tests
+	url = https://github.com/kaitai-io/kaitai_struct_tests.git

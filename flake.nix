@@ -4,6 +4,10 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
+    kaitai_struct_tests = {
+      url = "github:kaitai-io/kaitai_struct_tests";
+      flake = false;
+    };
   };
 
   outputs =
@@ -11,6 +15,7 @@
       self,
       nixpkgs,
       flake-utils,
+      kaitai_struct_tests,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -19,6 +24,11 @@
         zanbato = pkgs.buildGoModule {
           name = "zanbato";
           src = self;
+          postPatch = ''
+            mkdir -p internal/third_party
+            ln -s ${kaitai_struct_tests} internal/third_party/kaitai_struct_tests
+            find .
+          '';
           vendorHash = "sha256-HQMgcOmzI725cmQhDJKvxL00J0EMuBLa9Ji35LnohrY=";
         };
         format = pkgs.writeShellApplication {
@@ -78,6 +88,7 @@
           format = pkgs.runCommandLocal "check-format" { } ''
             cd ${self}
             ${pkgs.lib.getExe format} --check
+            ${pkgs.lib.attrsets.getBin zanbato}/bin/zanbato-dump-expr 1+1 >/dev/null
             touch $out
           '';
         };

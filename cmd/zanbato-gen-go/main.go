@@ -22,7 +22,7 @@ func main() {
 	emitter := golang.NewEmitter(*pkg, resolver)
 	basename, struc, err := resolver.Resolve("", rootname)
 	if err != nil {
-		log.Fatalf("error resolving root struct: %v", err)
+		log.Fatalf("Error resolving root struct: %v", err)
 	}
 	os.MkdirAll(*out, os.ModeDir|0o755)
 	artifacts := emitter.Emit(basename, struc)

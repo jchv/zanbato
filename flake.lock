@@ -18,6 +18,22 @@
         "type": "github"
       }
     },
+    "kaitai_struct_tests": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1735698185,
+        "narHash": "sha256-yvOsV2wXXgAYsPEdbsnHOWIojgGPWIhRYTpHlvz5QTw=",
+        "owner": "kaitai-io",
+        "repo": "kaitai_struct_tests",
+        "rev": "19fb8f52816ec192eb3871c4d2bbf9488ff23379",
+        "type": "github"
+      },
+      "original": {
+        "owner": "kaitai-io",
+        "repo": "kaitai_struct_tests",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1735653362,
@@ -36,6 +52,7 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
+        "kaitai_struct_tests": "kaitai_struct_tests",
         "nixpkgs": "nixpkgs"
       }
     },
