@@ -88,9 +88,9 @@
           format = pkgs.runCommandLocal "check-format" { } ''
             cd ${self}
             ${pkgs.lib.getExe format} --check
-            ${pkgs.lib.attrsets.getBin zanbato}/bin/zanbato-dump-expr 1+1 >/dev/null
             touch $out
           '';
+          inherit zanbato;
         };
         devShell = pkgs.mkShell {
           inputsFrom = [ zanbato ];
