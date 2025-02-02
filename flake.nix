@@ -92,7 +92,7 @@
           '';
           inherit zanbato;
         };
-        devShell = pkgs.mkShell {
+        devShells.default = pkgs.mkShell {
           inputsFrom = [ zanbato ];
           nativeBuildInputs = [
             pkgs.go
