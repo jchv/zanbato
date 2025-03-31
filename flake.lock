@@ -21,11 +21,11 @@
     "kaitai_struct_tests": {
       "flake": false,
       "locked": {
-        "lastModified": 1741216511,
-        "narHash": "sha256-Psddx7d8R8nTAKBJQ+E0xOHbYB6Utwtt1WQtJmvSJbs=",
+        "lastModified": 1743371633,
+        "narHash": "sha256-XXK7odpmZ2PNfs0Ttn6nBotri9ldr4Kh4avZ9MeaG8E=",
         "owner": "kaitai-io",
         "repo": "kaitai_struct_tests",
-        "rev": "6840cf23007be7e0fbfb78d2a0ce44437b543992",
+        "rev": "e10ba3026e014c70034a738f535db47e361ace82",
         "type": "github"
       },
       "original": {
@@ -36,11 +36,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1741700793,
-        "narHash": "sha256-Q3z6Wm+Hu7sjOO0q5LZS8pon8AX/Mv8JTPspYl/DDjI=",
+        "lastModified": 1743391229,
+        "narHash": "sha256-KM2By6TsefKOllnac5yPRC47BfDju49j+jJTSzGrtZc=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "ef659e24e6846fbaac7fae64ceb7b8ef5708c66a",
+        "rev": "cd200e7fae35823466f01833a2d535fd165ee43b",
         "type": "github"
       },
       "original": {
