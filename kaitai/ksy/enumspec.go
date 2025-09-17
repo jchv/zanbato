@@ -33,7 +33,7 @@ func enumValuesToYAML(e EnumValuePairsSpec) *yaml.Node {
 }
 
 // MarshalYAML implements yaml.Marshaler
-func (e EnumValuePairsSpec) MarshalYAML() (interface{}, error) {
+func (e EnumValuePairsSpec) MarshalYAML() (any, error) {
 	return enumValuesToYAML(e), nil
 }
 
@@ -72,7 +72,7 @@ type EnumSpec struct {
 type EnumsSpec []EnumSpec
 
 // MarshalYAML implements yaml.Marshaler
-func (e EnumsSpec) MarshalYAML() (interface{}, error) {
+func (e EnumsSpec) MarshalYAML() (any, error) {
 	n := &yaml.Node{Kind: yaml.MappingNode}
 	for _, i := range e {
 		n.Content = append(n.Content,

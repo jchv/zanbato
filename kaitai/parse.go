@@ -45,22 +45,26 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 		result.Meta.Endian.SwitchOn = switchOn
 		result.Meta.Endian.Cases = make(map[string]types.EndianKind)
 		for key, value := range typ.Meta.Endian.Cases {
-			if value == "le" {
+			switch value {
+			case "le":
 				result.Meta.Endian.Cases[key] = types.LittleEndian
-			} else if value == "be" {
+			case "be":
 				result.Meta.Endian.Cases[key] = types.BigEndian
-			} else {
+			default:
 				return nil, fmt.Errorf("unknown endian value %s", value)
 			}
 		}
 	}
 
-	if typ.Meta.BitEndian.Value == "le" {
-		result.Meta.BitEndian.Kind = types.LittleBitEndian
-	} else if typ.Meta.BitEndian.Value == "be" {
-		result.Meta.BitEndian.Kind = types.BigBitEndian
-	} else if typ.Meta.BitEndian.Value != "" {
-		return nil, fmt.Errorf("unknown bit endian value %s", typ.Meta.BitEndian.Value)
+	if typ.Meta.BitEndian.Value != "" {
+		switch typ.Meta.BitEndian.Value {
+		case "le":
+			result.Meta.BitEndian.Kind = types.LittleBitEndian
+		case "be":
+			result.Meta.BitEndian.Kind = types.BigBitEndian
+		default:
+			return nil, fmt.Errorf("unknown bit endian value %s", typ.Meta.BitEndian.Value)
+		}
 	}
 
 	for _, spec := range typ.Params {

@@ -23,7 +23,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("error resolving root struct: %v", err)
 	}
-	os.MkdirAll(*out, os.ModeDir|0o755)
+	if err := os.MkdirAll(*out, os.ModeDir|0o755); err != nil {
+		log.Fatalf("error creating output directory: %v", err)
+	}
 	artifacts := emitter.Emit(basename, struc)
 	for _, artifact := range artifacts {
 		outname := filepath.Join(*out, artifact.Filename)

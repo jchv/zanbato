@@ -440,11 +440,11 @@ func (e *Evaluator) readOne(attr *engine.ExprValue, n *types.TypeRef, index int)
 		}
 	case types.String:
 		if n.String.SizeEOS {
-			str, err := e.stream.ReadStrEOS(n.String.Encoding)
+			buf, err := io.ReadAll(e.stream)
 			if err != nil {
 				panic(err)
 			}
-			value = str
+			value = string(buf)
 		} else if n.String.Size != nil {
 			sizeVal, err := engine.Evaluate(e.context, n.String.Size)
 			if err != nil {

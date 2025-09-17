@@ -34,12 +34,12 @@ func TestParse(t *testing.T) {
 		},
 		{
 			Name:   "Enums",
-			Source: `{meta: {id: enums}, enums: {enum_a: {0: value1, 1: value2}, enum_b: {0x00: b0, 0x01: b1}}}`,
+			Source: `{meta: {id: enums}, enums: {enum_a: {1: value1, 2: value2}, enum_b: {0x01: b0, 0x02: b1}}}`,
 			Struct: &Struct{
 				ID: "enums",
 				Enums: []*Enum{
-					{ID: "enum_a", Values: []EnumValue{{big.NewInt(0), "value1"}, {big.NewInt(1), "value2"}}},
-					{ID: "enum_b", Values: []EnumValue{{big.NewInt(0), "b0"}, {big.NewInt(1), "b1"}}},
+					{ID: "enum_a", Values: []EnumValue{{big.NewInt(1), "value1"}, {big.NewInt(2), "value2"}}},
+					{ID: "enum_b", Values: []EnumValue{{big.NewInt(1), "b0"}, {big.NewInt(2), "b1"}}},
 				},
 			},
 		},
@@ -49,7 +49,7 @@ func TestParse(t *testing.T) {
 			Struct: &Struct{
 				ID: "attrs",
 				Seq: []*Attr{
-					{ID: "magic", Type: types.Type{TypeRef: &types.TypeRef{Kind: types.Bytes, Bytes: &types.BytesType{Consume: true, EosError: true, Size: &expr.Expr{expr.IntNode{big.NewInt(4)}}}}}, Contents: []byte{0x7f, 'E', 'L', 'F'}},
+					{ID: "magic", Type: types.Type{TypeRef: &types.TypeRef{Kind: types.Bytes, Bytes: &types.BytesType{Consume: true, EosError: true, Size: &expr.Expr{Root: expr.IntNode{Integer: big.NewInt(4)}}}}}, Contents: []byte{0x7f, 'E', 'L', 'F'}},
 				},
 			},
 		},

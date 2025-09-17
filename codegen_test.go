@@ -1,6 +1,7 @@
 package zanbato
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -37,9 +38,12 @@ func TestCodeGeneration(t *testing.T) {
 		"expr_2.ksy":                                     {},
 		"expr_bytes_non_literal.ksy":                     {},
 		"expr_fstring_0.ksy":                             {},
+		"expr_if_int_ops.ksy":                            {},
 		"expr_int_div.ksy":                               {},
 		"expr_io_eof.ksy":                                {},
+		"expr_io_eof_bits.ksy":                           {},
 		"expr_io_pos.ksy":                                {},
+		"expr_io_pos_bits.ksy":                           {},
 		"expr_io_ternary.ksy":                            {},
 		"expr_mod.ksy":                                   {},
 		"expr_ops_parens.ksy":                            {},
@@ -59,6 +63,10 @@ func TestCodeGeneration(t *testing.T) {
 		"index_to_param_eos.ksy":                         {},
 		"index_to_param_expr.ksy":                        {},
 		"index_to_param_until.ksy":                       {},
+		"instance_in_repeat_expr.ksy":                    {},
+		"instance_in_repeat_until.ksy":                   {},
+		"instance_in_sized.ksy":                          {},
+		"instance_io_user_earlier.ksy":                   {},
 		"io_local_var.ksy":                               {},
 		"nav_parent.ksy":                                 {},
 		"nav_parent2.ksy":                                {},
@@ -78,12 +86,15 @@ func TestCodeGeneration(t *testing.T) {
 		"params_def.ksy":                                 {},
 		"params_def_array_usertype_imported.ksy":         {},
 		"params_pass_array_int.ksy":                      {},
+		"params_pass_array_io.ksy":                       {},
 		"params_pass_array_str.ksy":                      {},
 		"params_pass_array_struct.ksy":                   {},
 		"params_pass_array_usertype.ksy":                 {},
 		"params_pass_bool.ksy":                           {},
+		"params_pass_io.ksy":                             {},
 		"params_pass_struct.ksy":                         {},
 		"position_in_seq.ksy":                            {},
+		"process_bytes_pad_term.ksy":                     {},
 		"process_coerce_bytes.ksy":                       {},
 		"process_coerce_switch.ksy":                      {},
 		"process_coerce_usertype1.ksy":                   {},
@@ -91,15 +102,31 @@ func TestCodeGeneration(t *testing.T) {
 		"process_custom.ksy":                             {},
 		"process_repeat_bytes.ksy":                       {},
 		"process_repeat_usertype.ksy":                    {},
+		"process_repeat_usertype_dynarg_custom.ksy":      {},
+		"process_repeat_usertype_dynarg_rotate.ksy":      {},
+		"process_repeat_usertype_dynarg_xor.ksy":         {},
 		"process_rotate.ksy":                             {},
+		"process_struct_pad_term.ksy":                    {},
+		"process_term_struct.ksy":                        {},
 		"process_to_user.ksy":                            {},
 		"process_xor4_const.ksy":                         {},
 		"process_xor4_value.ksy":                         {},
 		"process_xor_const.ksy":                          {},
 		"process_xor_value.ksy":                          {},
+		"repeat_eos_term_bytes.ksy":                      {},
+		"repeat_eos_term_struct.ksy":                     {},
+		"repeat_n_term_bytes.ksy":                        {},
+		"repeat_n_term_struct.ksy":                       {},
+		"repeat_until_bytes.ksy":                         {},
+		"repeat_until_bytes_pad.ksy":                     {},
+		"repeat_until_bytes_pad_term.ksy":                {},
 		"repeat_until_s4.ksy":                            {},
+		"repeat_until_term_bytes.ksy":                    {},
+		"repeat_until_term_struct.ksy":                   {},
 		"str_encodings_escaping_to_s.ksy":                {},
 		"str_literals.ksy":                               {},
+		"struct_pad_term.ksy":                            {},
+		"struct_pad_term_equal.ksy":                      {},
 		"switch_bytearray.ksy":                           {},
 		"switch_cast.ksy":                                {},
 		"switch_else_only.ksy":                           {},
@@ -110,6 +137,13 @@ func TestCodeGeneration(t *testing.T) {
 		"switch_manual_int_size_eos.ksy":                 {},
 		"switch_manual_str_else.ksy":                     {},
 		"term_bytes.ksy":                                 {},
+		"term_bytes2.ksy":                                {},
+		"term_bytes3.ksy":                                {},
+		"term_bytes4.ksy":                                {},
+		"term_struct.ksy":                                {},
+		"term_struct2.ksy":                               {},
+		"term_struct3.ksy":                               {},
+		"term_struct4.ksy":                               {},
 		"term_u1_val.ksy":                                {},
 		"type_int_unary_op.ksy":                          {},
 		"type_ternary.ksy":                               {},
@@ -147,9 +181,11 @@ func TestCodeGeneration(t *testing.T) {
 				emitter := golang.NewEmitter("test_formats", resolver)
 				basename, struc, err := resolver.Resolve("", match)
 				if err != nil {
-					log.Fatalf("Error resolving root struct: %v", err)
+					panic(fmt.Errorf("Error resolving root struct: %w", err))
 				}
-				os.MkdirAll(TestCompiledPath, os.ModeDir|0o755)
+				if err := os.MkdirAll(TestCompiledPath, os.ModeDir|0o755); err != nil {
+					t.Fatal(err)
+				}
 				artifacts := emitter.Emit(basename, struc)
 				for _, artifact := range artifacts {
 					outname := filepath.Join(TestCompiledPath, artifact.Filename)

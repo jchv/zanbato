@@ -12,7 +12,7 @@ func (e *BitEndianSpec) UnmarshalText(text []byte) error {
 }
 
 // MarshalYAML implements yaml.Marshaler
-func (e *BitEndianSpec) MarshalYAML() (interface{}, error) {
+func (e *BitEndianSpec) MarshalYAML() (any, error) {
 	if e.Value != "" {
 		return e.Value, nil
 	}

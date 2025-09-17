@@ -37,5 +37,7 @@ func main() {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "\t")
 	enc.SetEscapeHTML(false)
-	enc.Encode(annotations)
+	if err := enc.Encode(annotations); err != nil {
+		log.Fatalf("error encoding json: %v", err)
+	}
 }

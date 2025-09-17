@@ -21,6 +21,6 @@ func NewSubStream(stream *kaitai.Stream, off int64, n int64) *Stream {
 	return kaitai.NewStream(io.NewSectionReader(stream.ReadSeeker.(io.ReaderAt), off, n))
 }
 
-func NewValidationNotEqualError(expected interface{}, actual interface{}, io *Stream, srcPath string) kaitai.ValidationNotEqualError {
-	return kaitai.NewValidationNotEqualError(expected, actual, io, srcPath)
+func NewValidationNotEqualError(expected any, actual any, stream *Stream, srcPath string) kaitai.ValidationNotEqualError {
+	return kaitai.NewValidationNotEqualError(expected, actual, stream, srcPath)
 }

@@ -295,13 +295,21 @@ type protocol struct {
 }
 
 func (p *protocol) emitdef(w io.Writer) {
-	fmt.Fprintf(w, "-- region %s protocol definition\n", p.name)
-	fmt.Fprintf(w, "\n")
-	fmt.Fprintf(w, "local %[1]s_protocol = Proto(\"%[2]s Protocol\")\n", p.name, strings.Title(p.name))
+	if _, err := fmt.Fprintf(w, "-- region %s protocol definition\n", p.name); err != nil {
+		panic(err)
+	}
+	if _, err := fmt.Fprintf(w, "\n"); err != nil {
+		panic(err)
+	}
+	if _, err := fmt.Fprintf(w, "local %[1]s_protocol = Proto(\"%[2]s Protocol\")\n", p.name, strings.Title(p.name)); err != nil {
+		panic(err)
+	}
 	for _, field := range p.fields {
 		field.emitdef(w, p.name)
 	}
-	fmt.Fprintf(w, "%[1]s_protocol.fields = {\n", p.name)
+	if _, err := fmt.Fprintf(w, "%[1]s_protocol.fields = {\n", p.name); err != nil {
+		panic(err)
+	}
 	for i, field := range p.fields {
 		eol := ","
 		if i == len(p.fields)-1 {
@@ -309,10 +317,18 @@ func (p *protocol) emitdef(w io.Writer) {
 		}
 		fmt.Fprintf(w, "  %[1]s_%[2]s_field%s\n", p.name, field.name, eol)
 	}
-	fmt.Fprintf(w, "}\n")
-	fmt.Fprintf(w, "\n")
-	fmt.Fprintf(w, "-- endregion %s protocol definition\n", p.name)
-	fmt.Fprintf(w, "\n")
+	if _, err := fmt.Fprintf(w, "}\n"); err != nil {
+		panic(err)
+	}
+	if _, err := fmt.Fprintf(w, "\n"); err != nil {
+		panic(err)
+	}
+	if _, err := fmt.Fprintf(w, "-- endregion %s protocol definition\n", p.name); err != nil {
+		panic(err)
+	}
+	if _, err := fmt.Fprintf(w, "\n"); err != nil {
+		panic(err)
+	}
 }
 
 type field struct {

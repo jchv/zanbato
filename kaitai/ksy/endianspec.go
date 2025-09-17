@@ -17,7 +17,7 @@ func (e *EndianSpec) UnmarshalText(text []byte) error {
 }
 
 // MarshalYAML implements yaml.Marshaler
-func (e *EndianSpec) MarshalYAML() (interface{}, error) {
+func (e *EndianSpec) MarshalYAML() (any, error) {
 	if e.Value != "" {
 		return e.Value, nil
 	}

@@ -43,20 +43,20 @@ type Attrs struct {
 	Parent_ any
 }
 
-func (this *Attrs) Read(io *kaitai.Stream) (err error) {
+func (this *Attrs) Read(stream *kaitai.Stream) (err error) {
 	if this.Root_ == nil {
 		this.Root_ = this
 	}
-	this.IO_ = io
-	tmp1, err := io.ReadBytes(int(4))
+	this.IO_ = stream
+	tmp1, err := stream.ReadBytes(int(4))
 	if err != nil {
 		return err
 	}
 	this.Magic = (tmp1)
 	if !bytes.Equal(tmp1, []byte{0x7f, 0x45, 0x4c, 0x46}) {
-		return kaitai.NewValidationNotEqualError([]byte{0x7f, 0x45, 0x4c, 0x46}, tmp1, io, "") // TODO: set srcPath
+		return kaitai.NewValidationNotEqualError([]byte{0x7f, 0x45, 0x4c, 0x46}, tmp1, stream, "") // TODO: set srcPath
 	}
-	tmp2, err := io.ReadS8le()
+	tmp2, err := stream.ReadS8le()
 	if err != nil {
 		return err
 	}
@@ -64,12 +64,12 @@ func (this *Attrs) Read(io *kaitai.Stream) (err error) {
 	return nil
 }
 
-func (this *Attrs) ReadBE(io *kaitai.Stream) (err error) {
-	return this.Read(io)
+func (this *Attrs) ReadBE(stream *kaitai.Stream) (err error) {
+	return this.Read(stream)
 }
 
-func (this *Attrs) ReadLE(io *kaitai.Stream) (err error) {
-	return this.Read(io)
+func (this *Attrs) ReadLE(stream *kaitai.Stream) (err error) {
+	return this.Read(stream)
 }
 
 `,
@@ -101,17 +101,17 @@ type Expr struct {
 	Parent_ any
 }
 
-func (this *Expr) Read(io *kaitai.Stream) (err error) {
+func (this *Expr) Read(stream *kaitai.Stream) (err error) {
 	if this.Root_ == nil {
 		this.Root_ = this
 	}
-	this.IO_ = io
-	tmp1, err := io.ReadS2le()
+	this.IO_ = stream
+	tmp1, err := stream.ReadS2le()
 	if err != nil {
 		return err
 	}
 	this.A = (tmp1)
-	tmp2, err := io.ReadBytes(int((func() (int) { if ((int)(this.A) == (int)(1)) { return (int)(2) } else { return (int)(4) } }())))
+	tmp2, err := stream.ReadBytes(int((func() (int) { if ((int)(this.A) == (int)(1)) { return (int)(2) } else { return (int)(4) } }())))
 	if err != nil {
 		return err
 	}
@@ -119,12 +119,12 @@ func (this *Expr) Read(io *kaitai.Stream) (err error) {
 	return nil
 }
 
-func (this *Expr) ReadBE(io *kaitai.Stream) (err error) {
-	return this.Read(io)
+func (this *Expr) ReadBE(stream *kaitai.Stream) (err error) {
+	return this.Read(stream)
 }
 
-func (this *Expr) ReadLE(io *kaitai.Stream) (err error) {
-	return this.Read(io)
+func (this *Expr) ReadLE(stream *kaitai.Stream) (err error) {
+	return this.Read(stream)
 }
 
 `,

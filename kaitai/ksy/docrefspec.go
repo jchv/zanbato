@@ -42,7 +42,7 @@ func (b *DocRefSpec) UnmarshalYAML(node *yaml.Node) error {
 }
 
 // MarshalYAML implements yaml.Marshaler
-func (b DocRefSpec) MarshalYAML() (interface{}, error) {
+func (b DocRefSpec) MarshalYAML() (any, error) {
 	if len(b) == 0 {
 		return nil, nil
 	}

@@ -29,7 +29,7 @@
             ln -s ${kaitai_struct_tests} internal/third_party/kaitai_struct_tests
             find .
           '';
-          vendorHash = "sha256-DgkE+vJaV9gPi3klIypjRPhHnnfHG0FptsWwqV3i/EU=";
+          vendorHash = "sha256-rpOGv6E3R1r+gtUjDL4WNKaIsVqMBO8DFEQFYFGpiqQ=";
         };
         format = pkgs.writeShellApplication {
           name = "format";

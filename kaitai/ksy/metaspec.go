@@ -1,7 +1,7 @@
 package ksy
 
 // XrefSpec represents the type of meta/xref.
-type XrefSpec map[string]interface{}
+type XrefSpec map[string]any
 
 // MetaSpec represents a meta block.
 // #/definitions/MetaSpec

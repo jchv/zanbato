@@ -196,70 +196,70 @@ func (e *Emitter) readCallRef(n *types.TypeRef) string {
 		types.F4, types.F8:
 		panic("undecided endianness")
 	case types.U1:
-		return "io.ReadU1()"
+		return "stream.ReadU1()"
 	case types.U2le:
-		return "io.ReadU2le()"
+		return "stream.ReadU2le()"
 	case types.U2be:
-		return "io.ReadU2be()"
+		return "stream.ReadU2be()"
 	case types.U4le:
-		return "io.ReadU4le()"
+		return "stream.ReadU4le()"
 	case types.U4be:
-		return "io.ReadU4be()"
+		return "stream.ReadU4be()"
 	case types.U8le:
-		return "io.ReadU8le()"
+		return "stream.ReadU8le()"
 	case types.U8be:
-		return "io.ReadU8be()"
+		return "stream.ReadU8be()"
 	case types.S1:
-		return "io.ReadS1()"
+		return "stream.ReadS1()"
 	case types.S2le:
-		return "io.ReadS2le()"
+		return "stream.ReadS2le()"
 	case types.S2be:
-		return "io.ReadS2be()"
+		return "stream.ReadS2be()"
 	case types.S4le:
-		return "io.ReadS4le()"
+		return "stream.ReadS4le()"
 	case types.S4be:
-		return "io.ReadS4be()"
+		return "stream.ReadS4be()"
 	case types.S8le:
-		return "io.ReadS8le()"
+		return "stream.ReadS8le()"
 	case types.S8be:
-		return "io.ReadS8be()"
+		return "stream.ReadS8be()"
 	case types.Bits:
 		endianSuffix := "Be"
 		if n.Bits.Endian.Kind == types.LittleBitEndian {
 			endianSuffix = "Le"
 		}
-		return fmt.Sprintf("io.ReadBitsInt%s(%d)", endianSuffix, n.Bits.Width)
+		return fmt.Sprintf("stream.ReadBitsInt%s(%d)", endianSuffix, n.Bits.Width)
 	case types.F4le:
-		return "io.ReadF4le()"
+		return "stream.ReadF4le()"
 	case types.F4be:
-		return "io.ReadF4be()"
+		return "stream.ReadF4be()"
 	case types.F8le:
-		return "io.ReadF8le()"
+		return "stream.ReadF8le()"
 	case types.F8be:
-		return "io.ReadF8be()"
+		return "stream.ReadF8be()"
 	case types.Bytes:
 		if n.Bytes.Size != nil {
-			return fmt.Sprintf("io.ReadBytes(int(%s))", e.expr(n.Bytes.Size))
+			return fmt.Sprintf("stream.ReadBytes(int(%s))", e.expr(n.Bytes.Size))
 		}
 		if n.Bytes.SizeEOS {
-			return "io.ReadBytesFull()"
+			return "stream.ReadBytesFull()"
 		}
 		panic("not implemented yet: bytes")
 	case types.String:
 		if n.String.SizeEOS {
-			return fmt.Sprintf("io.ReadStrEOS(%q)", n.String.Encoding)
+			return "io.ReadAll(stream)"
 		}
 		if n.String.Size != nil {
 			if n.String.Terminator == -1 {
-				return fmt.Sprintf("io.ReadBytes(int(%s))", e.expr(n.String.Size))
+				return fmt.Sprintf("stream.ReadBytes(int(%s))", e.expr(n.String.Size))
 			} else {
-				return fmt.Sprintf("io.ReadBytesPadTerm(%s, %q, %q, %v)", e.expr(n.String.Size), n.String.Terminator, n.String.Terminator, n.String.Include)
+				return fmt.Sprintf("stream.ReadBytesPadTerm(%s, %q, %q, %v)", e.expr(n.String.Size), n.String.Terminator, n.String.Terminator, n.String.Include)
 			}
 		} else {
 			if n.String.Terminator == -1 {
 				panic("undecidable condition")
 			}
-			return fmt.Sprintf("io.ReadBytesTerm(%q, %v, %v, %v)", rune(n.String.Terminator), n.String.Include, n.String.Consume, n.String.EosError)
+			return fmt.Sprintf("stream.ReadBytesTerm(%q, %v, %v, %v)", rune(n.String.Terminator), n.String.Include, n.String.Consume, n.String.EosError)
 		}
 	case types.User:
 		panic("called readCallRef on user type!")
@@ -409,7 +409,7 @@ func (e *Emitter) exprNode(node expr.Node) string {
 			e.needParent = true
 			return "_parent"
 		case e.context.StreamValue():
-			return "io"
+			return "stream"
 		}
 		switch v.Type.Kind {
 		case engine.ParamKind:
@@ -635,7 +635,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 	if rt.TypeSwitch != nil {
 		// Call type-switch helper
 		switchName := e.prefix(typ.Parent) + e.typeSwitchName(rt.TypeSwitch.FieldName)
-		fn.printf("if err := this.read%s%s(io); err != nil {", switchName, endianSuffix).indent()
+		fn.printf("if err := this.read%s%s(stream); err != nil {", switchName, endianSuffix).indent()
 		fn.printf("return err")
 		fn.unindent().printf("}")
 	} else {
@@ -653,7 +653,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				fn.printf("for {").indent()
 
 				// EOF return
-				fn.printf("if eof, err := io.EOF(); err != nil {").indent()
+				fn.printf("if eof, err := stream.EOF(); err != nil {").indent()
 				fn.printf("return err")
 				fn.unindent().printf("} else if eof {").indent()
 				fn.printf("break")
@@ -664,7 +664,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				fn.printf("tmp%d := %s{}", fn.tmp, declType)
 				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), *rt.TypeRef, resolved, fn)
 				// TODO: need to handle substream for user size
-				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
+				fn.printf("if err := tmp%d.Read%s(stream); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
 				fn.printf("this.%s = append(this.%s, tmp%d)", fieldName, fieldName, fn.tmp)
@@ -678,7 +678,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
 				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), *rt.TypeRef, resolved, fn)
 				// TODO: need to handle substream for user size
-				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
+				fn.printf("if err := tmp%d.Read%s(stream); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
 				fn.printf("this.%s = append(this.%s, tmp%d)", fieldName, fieldName, fn.tmp)
@@ -691,7 +691,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
 				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), *rt.TypeRef, resolved, fn)
 				// TODO: need to handle substream for user size
-				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
+				fn.printf("if err := tmp%d.Read%s(stream); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
 				fn.printf("if bool(%s) {", e.expr(repeat.UntilExpr)).indent()
@@ -705,7 +705,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				fn.printf("tmp%d := %s{}", fn.tmp, e.declTypeRef(rt.TypeRef, nil))
 				e.setParams(fmt.Sprintf("tmp%d", fn.tmp), *rt.TypeRef, resolved, fn)
 				// TODO: need to handle substream for user size
-				fn.printf("if err := tmp%d.Read%s(io); err != nil {", fn.tmp, endianSuffix).indent()
+				fn.printf("if err := tmp%d.Read%s(stream); err != nil {", fn.tmp, endianSuffix).indent()
 				fn.printf("return err")
 				fn.unindent().printf("}")
 				fn.printf("this.%s = tmp%d", fieldName, fn.tmp)
@@ -732,7 +732,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				fn.printf("for {").indent()
 
 				// EOF return
-				fn.printf("if eof, err := io.EOF(); err != nil {").indent()
+				fn.printf("if eof, err := stream.EOF(); err != nil {").indent()
 				fn.printf("return err")
 				fn.unindent().printf("} else if eof {").indent()
 				fn.printf("break")
@@ -786,7 +786,7 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprType, force
 				e.setImport(unit, kaitaiRuntimePackagePath, kaitaiRuntimePackageName)
 
 				fn.printf("if !bytes.Equal(tmp%d, %#v) {", fn.tmp, a.Contents).indent()
-				fn.printf("return kaitai.NewValidationNotEqualError(%#v, tmp%d, io, \"\") // TODO: set srcPath", a.Contents, fn.tmp)
+				fn.printf("return kaitai.NewValidationNotEqualError(%#v, tmp%d, stream, \"\") // TODO: set srcPath", a.Contents, fn.tmp)
 				fn.unindent().printf("}")
 			}
 		}
@@ -889,7 +889,7 @@ func (e *Emitter) typeSwitch(unit *goUnit, val *engine.ExprValue, forceEndian ty
 	readFn := goFunc{
 		recv: goVar{name: "this", typ: "*" + e.prefix(val.Type.Parent.Parent) + e.typeName(val.Type.Parent.Struct.Type.ID)},
 		name: "read" + typeSwitchName + endianSuffix,
-		in:   []goVar{{name: "io", typ: "*" + kaitaiStream}},
+		in:   []goVar{{name: "stream", typ: "*" + kaitaiStream}},
 		out:  []goVar{{name: "err", typ: "error"}},
 	}
 	readFn.printf("switch %s {", e.expr(ts.SwitchOn))
@@ -911,7 +911,7 @@ func (e *Emitter) typeSwitch(unit *goUnit, val *engine.ExprValue, forceEndian ty
 			readFn.printf("case (%s)(%s):", typeCast, goValue).indent()
 			readFn.printf("tmp%d := %s{}", readFn.tmp, goUnderlyingType)
 			e.setParams(fmt.Sprintf("tmp%d", readFn.tmp), typ, resolved, &readFn)
-			readFn.printf("if err := tmp%d.Read(io); err != nil {", readFn.tmp).indent()
+			readFn.printf("if err := tmp%d.Read(stream); err != nil {", readFn.tmp).indent()
 			readFn.printf("return err")
 			readFn.unindent().printf("}")
 
@@ -993,7 +993,7 @@ func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, val *engine.ExprValue, f
 	readMethod := goFunc{
 		recv: goVar{name: "this", typ: "*" + gs.name},
 		name: "Read" + endianSuffix,
-		in:   []goVar{{name: "io", typ: "*" + kaitaiStream}},
+		in:   []goVar{{name: "stream", typ: "*" + kaitaiStream}},
 		out:  []goVar{{name: "err", typ: "error"}},
 	}
 	errExit := false
@@ -1008,7 +1008,7 @@ func (e *Emitter) strucRead(unit *goUnit, gs *goStruct, val *engine.ExprValue, f
 		readMethod.printf("return nil")
 	}
 	e.ensureStructLinks(&readMethod, val)
-	readMethod.preprintf("this.IO_ = io")
+	readMethod.preprintf("this.IO_ = stream")
 	readMethod.preprintf("if this.Root_ == nil {\n\t\tthis.Root_ = this\n\t}")
 	unit.methods = append(unit.methods, readMethod)
 }
@@ -1039,16 +1039,16 @@ func (e *Emitter) endianStubs(unit *goUnit, gs *goStruct, ks *kaitai.Struct) {
 	unit.methods = append(unit.methods, goFunc{
 		recv:   goVar{name: "this", typ: "*" + gs.name},
 		name:   "ReadBE",
-		in:     []goVar{{name: "io", typ: "*" + kaitaiStream}},
+		in:     []goVar{{name: "stream", typ: "*" + kaitaiStream}},
 		out:    []goVar{{name: "err", typ: "error"}},
-		source: "\treturn this.Read(io)\n",
+		source: "\treturn this.Read(stream)\n",
 	})
 	unit.methods = append(unit.methods, goFunc{
 		recv:   goVar{name: "this", typ: "*" + gs.name},
 		name:   "ReadLE",
-		in:     []goVar{{name: "io", typ: "*" + kaitaiStream}},
+		in:     []goVar{{name: "stream", typ: "*" + kaitaiStream}},
 		out:    []goVar{{name: "err", typ: "error"}},
-		source: "\treturn this.Read(io)\n",
+		source: "\treturn this.Read(stream)\n",
 	})
 }
 
@@ -1058,7 +1058,7 @@ func (e *Emitter) endianSwitch(unit *goUnit, gs *goStruct, ks *kaitai.Struct) {
 	fn := goFunc{
 		recv: goVar{name: "this", typ: "*" + gs.name},
 		name: "ReadBE",
-		in:   []goVar{{name: "io", typ: "*" + kaitaiStream}},
+		in:   []goVar{{name: "stream", typ: "*" + kaitaiStream}},
 		out:  []goVar{{name: "err", typ: "error"}},
 	}
 
@@ -1066,9 +1066,9 @@ func (e *Emitter) endianSwitch(unit *goUnit, gs *goStruct, ks *kaitai.Struct) {
 	for value, endian := range ks.Meta.Endian.Cases {
 		fn.printf("case %s:", e.typeSwitchCaseValue(value))
 		if endian == types.LittleEndian {
-			fn.printf("\treturn this.ReadLE(io)")
+			fn.printf("\treturn this.ReadLE(stream)")
 		} else {
-			fn.printf("\treturn this.ReadBE(io)")
+			fn.printf("\treturn this.ReadBE(stream)")
 		}
 	}
 	fn.printf("default:")

@@ -23,7 +23,7 @@ type InstanceSpecItem struct {
 type InstancesSpec struct{ Instances []InstanceSpecItem }
 
 // MarshalYAML implements yaml.Marshaler
-func (m InstancesSpec) MarshalYAML() (interface{}, error) {
+func (m InstancesSpec) MarshalYAML() (any, error) {
 	fields := []reflect.StructField{}
 	for i, n := range m.Instances {
 		fields = append(fields, reflect.StructField{

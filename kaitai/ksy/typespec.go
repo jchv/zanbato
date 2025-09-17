@@ -24,7 +24,7 @@ type TypeSpec struct {
 type TypesSpec []TypeSpec
 
 // MarshalYAML implements yaml.Marshaler
-func (t TypesSpec) MarshalYAML() (interface{}, error) {
+func (t TypesSpec) MarshalYAML() (any, error) {
 	fields := []reflect.StructField{}
 	for i, n := range t {
 		fields = append(fields, reflect.StructField{

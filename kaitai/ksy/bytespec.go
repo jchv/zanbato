@@ -49,7 +49,7 @@ func (b *ByteSpec) UnmarshalYAML(node *yaml.Node) error {
 }
 
 // MarshalYAML implements yaml.Marshaler
-func (b ByteSpec) MarshalYAML() (interface{}, error) {
+func (b ByteSpec) MarshalYAML() (any, error) {
 	n := &yaml.Node{Kind: yaml.SequenceNode, Style: yaml.FlowStyle}
 	for _, i := range b {
 		n.Content = append(n.Content, &yaml.Node{
