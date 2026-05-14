@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"path"
 	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/jchv/zanbato/kaitai"
 	"github.com/jchv/zanbato/kaitai/emitter"
@@ -59,9 +61,10 @@ func (e *Emitter) root(inputname string, s *kaitai.Struct) {
 
 	mod := module{}
 
-	root := engine.NewStructValueSymbol(engine.NewStructTypeSymbol(s, nil), nil)
-	e.context.AddGlobalType(string(s.ID), root.Type)
-	e.context.AddModuleType(string(s.ID), root.Type)
+	rootType := engine.NewStructSymbol(s, nil)
+	root := engine.NewStructValueSymbol(rootType, nil)
+	e.context.AddGlobalType(string(s.ID), rootType)
+	e.context.AddModuleType(string(s.ID), rootType)
 	oldContext := e.context
 	e.context = e.context.WithModuleRoot(root).WithLocalRoot(root)
 
@@ -80,7 +83,7 @@ func (e *Emitter) root(inputname string, s *kaitai.Struct) {
 }
 
 func (e *Emitter) struc(inputname string, mod *module, val *engine.ExprValue) {
-	ks := val.Type.Struct.Type
+	ks := val.Struct.Type
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -89,7 +92,7 @@ func (e *Emitter) struc(inputname string, mod *module, val *engine.ExprValue) {
 	}()
 
 	name := e.typeName(ks.ID)
-	prefix := e.prefix(val.Type.Parent)
+	prefix := e.prefix(val.DefParent)
 
 	ps := protocol{name: prefix + name}
 
@@ -107,59 +110,46 @@ func (e *Emitter) struc(inputname string, mod *module, val *engine.ExprValue) {
 	}
 
 	// Then handle nested structures
-	for _, n := range val.Type.Struct.Structs {
+	for _, n := range val.Struct.Structs {
 		e.struc(inputname, mod, engine.NewStructValueSymbol(n, val))
 	}
 
-	// Enumerations
-	for _, n := range val.Type.Struct.Enums {
+	// Enumerations: not yet generated for Wireshark dissectors. The Lua
+	// dissector API expects enum decoding to be inlined per-field via
+	// VALS({...}) - wiring that up here is unimplemented.
+	for _, n := range val.Struct.Enums {
 		_ = n
-		log.Printf("TODO: generate enumerations")
-		// e.enum(mod, n)
 	}
 
 	// Attribute fields
 	for _, attr := range val.Struct.Attrs {
 		ps.fields = append(ps.fields, field{
-			name: e.fieldName(attr.Type.Attr.ID),
-			typ:  e.fieldType(attr.Type),
+			name: e.fieldName(attr.Attr.ID),
+			typ:  e.fieldType(attr),
 			base: "DEC",
-			desc: attr.Type.Attr.Doc,
+			desc: attr.Attr.Doc,
 		})
 	}
 
-	// Deserialization
+	// Deserialization: the Wireshark dissector emitter currently builds the
+	// field table (ps.fields above) but does NOT emit a runtime dissect
+	// function. Each branch below is a stub for the read-side code we would
+	// generate once dissection is wired up - endian switching, multi-endian
+	// reads, and type-switch dispatch all need their Lua counterparts.
 	if e.endian == types.SwitchEndian || (e.needMultipleEndian(ks) && e.endian == types.UnspecifiedOrder) {
-		if e.endian == types.SwitchEndian {
-			log.Printf("TODO: generate endian switch")
-			// e.endianSwitch(mod, &ps, ks)
-		} else {
-			log.Printf("TODO: generate undecided endianness")
-			// e.strucRead(mod, &ps, val, types.UnspecifiedOrder)
-		}
-		log.Printf("TODO: generate le/be")
-		// e.strucRead(mod, &ps, val, types.LittleEndian)
-		// e.strucRead(mod, &ps, val, types.BigEndian)
-
+		// e.endianSwitch / e.strucRead (multi-endian) - unimplemented.
 		for _, attr := range val.Struct.Attrs {
-			if attr.Type.Attr.Type.TypeSwitch != nil {
-				log.Printf("TODO: generate multi endian type switches")
-				// e.typeSwitchStruct(mod, attr.Type)
-				// e.typeSwitch(mod, attr, types.LittleEndian)
-				// e.typeSwitch(mod, attr, types.BigEndian)
+			if attr.Attr.Type.TypeSwitch != nil {
+				// e.typeSwitchStruct / e.typeSwitch (multi-endian) - unimplemented.
+				_ = attr
 			}
 		}
 	} else {
-		// Struct is always consistent endianness: generate one read function and make two stubs to it.
-		log.Printf("TODO: generate single endian read")
-		// e.strucRead(mod, &gs, val, types.UnspecifiedOrder)
-		// e.endianStubs(mod, &gs, ks)
-
+		// e.strucRead (single endian) + e.endianStubs - unimplemented.
 		for _, attr := range val.Struct.Attrs {
-			if attr.Type.Attr.Type.TypeSwitch != nil {
-				log.Printf("TODO: generate single endian type switches")
-				//e.typeSwitchStruct(mod, attr.Type)
-				//e.typeSwitch(mod, attr, types.UnspecifiedOrder)
+			if attr.Attr.Type.TypeSwitch != nil {
+				// e.typeSwitchStruct / e.typeSwitch (single endian) - unimplemented.
+				_ = attr
 			}
 		}
 	}
@@ -167,7 +157,7 @@ func (e *Emitter) struc(inputname string, mod *module, val *engine.ExprValue) {
 	mod.protocols = append(mod.protocols, ps)
 }
 
-func (e *Emitter) fieldType(typ *engine.ExprType) string {
+func (e *Emitter) fieldType(typ *engine.ExprValue) string {
 	switch typ.Kind {
 	case engine.StructKind:
 		return "BYTES"
@@ -181,7 +171,10 @@ func (e *Emitter) fieldType(typ *engine.ExprType) string {
 		if vt.Type.TypeRef != nil {
 			return e.fieldTypeRef(vt.Type.TypeRef, vt.Repeat)
 		} else if vt.Type.TypeSwitch != nil {
-			log.Printf("TODO: type switch decl?")
+			// Type-switch fields don't map cleanly to a single ProtoField
+			// type - we'd need to emit per-case sub-fields. For now we
+			// surface a NONE placeholder so the rest of the dissector can
+			// still be generated.
 			return "NONE"
 		} else {
 			panic("invalid type")
@@ -213,7 +206,11 @@ func (e *Emitter) fieldTypeRef(n *types.TypeRef, r types.RepeatType) string {
 	case types.S8, types.S8le, types.S8be:
 		return "INT64"
 	case types.Bits:
-		panic("TODO: bitfields")
+		// Wireshark ProtoFields support bit-packed integers via UINT8/16/32
+		// with a mask, but emitting those requires width-aware allocation
+		// across adjacent bit fields. Until that's implemented, fall over
+		// loudly so the caller doesn't ship a silently-broken dissector.
+		panic("wireshark: bit fields are not yet supported")
 	case types.F4, types.F4le, types.F4be:
 		return "FLOAT"
 	case types.F8, types.F8le, types.F8be:
@@ -229,9 +226,9 @@ func (e *Emitter) fieldTypeRef(n *types.TypeRef, r types.RepeatType) string {
 		typ := e.resolveType(n.User.Name)
 		switch typ.Kind {
 		case engine.StructKind:
-			return e.prefix(typ.Parent) + e.typeName(typ.Struct.Type.ID)
+			return e.prefix(typ.DefParent) + e.typeName(typ.Struct.Type.ID)
 		case engine.EnumKind:
-			return e.prefix(typ.Parent) + e.typeName(typ.Enum.ID)
+			return e.prefix(typ.DefParent) + e.typeName(typ.Enum.ID)
 		default:
 			panic(fmt.Errorf("expression %q yielded unexpected type %s", n.User.Name, typ.Kind))
 		}
@@ -239,8 +236,8 @@ func (e *Emitter) fieldTypeRef(n *types.TypeRef, r types.RepeatType) string {
 	panic("unexpected typekind: " + n.Kind.String())
 }
 
-func (e *Emitter) resolveType(ex string) *engine.ExprType {
-	typ := engine.ResultTypeOfExpr(e.context, expr.MustParseExpr(ex)).Type()
+func (e *Emitter) resolveType(ex string) *engine.ExprValue {
+	typ := engine.ResolveTypeOfExpr(e.context, expr.MustParseExpr(ex))
 	if typ == nil {
 		panic(fmt.Errorf("unresolved type: %s", ex))
 	}
@@ -260,7 +257,7 @@ func (e *Emitter) needMultipleEndian(s *kaitai.Struct) bool {
 	return false
 }
 
-func (e *Emitter) prefix(typ *engine.ExprType) string {
+func (e *Emitter) prefix(typ *engine.ExprValue) string {
 	if typ == nil || typ.Struct == nil {
 		return ""
 	}
@@ -301,7 +298,8 @@ func (p *protocol) emitdef(w io.Writer) {
 	if _, err := fmt.Fprintf(w, "\n"); err != nil {
 		panic(err)
 	}
-	if _, err := fmt.Fprintf(w, "local %[1]s_protocol = Proto(\"%[2]s Protocol\")\n", p.name, strings.Title(p.name)); err != nil {
+	titleCase := cases.Title(language.English, cases.NoLower)
+	if _, err := fmt.Fprintf(w, "local %[1]s_protocol = Proto(\"%[2]s Protocol\")\n", p.name, titleCase.String(p.name)); err != nil {
 		panic(err)
 	}
 	for _, field := range p.fields {
@@ -315,7 +313,7 @@ func (p *protocol) emitdef(w io.Writer) {
 		if i == len(p.fields)-1 {
 			eol = ""
 		}
-		fmt.Fprintf(w, "  %[1]s_%[2]s_field%s\n", p.name, field.name, eol)
+		_, _ = fmt.Fprintf(w, "  %[1]s_%[2]s_field%s\n", p.name, field.name, eol)
 	}
 	if _, err := fmt.Fprintf(w, "}\n"); err != nil {
 		panic(err)
@@ -339,5 +337,5 @@ type field struct {
 }
 
 func (f *field) emitdef(w io.Writer, prefix string) {
-	fmt.Fprintf(w, "local %[1]s_%[2]s_field = ProtoField.new(\"%[1]s.%[2]s\", \"%[2]s\", ftypes.%[3]s, nil, base.%[4]s, nil, %[5]q)\n", prefix, f.name, f.typ, f.base, strings.TrimSpace(f.desc))
+	_, _ = fmt.Fprintf(w, "local %[1]s_%[2]s_field = ProtoField.new(\"%[1]s.%[2]s\", \"%[2]s\", ftypes.%[3]s, nil, base.%[4]s, nil, %[5]q)\n", prefix, f.name, f.typ, f.base, strings.TrimSpace(f.desc))
 }

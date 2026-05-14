@@ -1,0 +1,9 @@
+id: zb_nav_root_access
+data: zb_nav_root_access.bin
+asserts:
+  - actual: multiplier
+    expected: 3
+  - actual: nested.base
+    expected: 10
+  - actual: nested.product
+    expected: 30

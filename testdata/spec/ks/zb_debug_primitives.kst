@@ -1,0 +1,11 @@
+id: zb_debug_primitives
+data: zb_expr_arr_methods.bin
+asserts:
+  - actual: header
+    expected: 30
+  - actual: items.size
+    expected: 4
+  - actual: items[0]
+    expected: 10
+  - actual: items[3]
+    expected: 40

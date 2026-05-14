@@ -1,0 +1,17 @@
+id: zb_expr_arr_methods
+data: zb_expr_arr_methods.bin
+asserts:
+  - actual: items[0]
+    expected: 30
+  - actual: items[4]
+    expected: 40
+  - actual: arr_size
+    expected: 5
+  - actual: arr_first
+    expected: 30
+  - actual: arr_last
+    expected: 40
+  - actual: arr_min
+    expected: 10
+  - actual: arr_max
+    expected: 50

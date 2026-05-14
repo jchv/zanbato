@@ -48,9 +48,9 @@ const _Kind_name = "U1U2U2leU2beU4U4leU4beU8U8leU8beS1S2S2leS2beS4S4leS4beS8S8le
 var _Kind_index = [...]uint8{0, 2, 4, 8, 12, 14, 18, 22, 24, 28, 32, 34, 36, 40, 44, 46, 50, 54, 56, 60, 64, 68, 70, 74, 78, 80, 84, 88, 93, 99, 103, 113, 125, 136}
 
 func (i Kind) String() string {
-	i -= 1
-	if i < 0 || i >= Kind(len(_Kind_index)-1) {
-		return "Kind(" + strconv.FormatInt(int64(i+1), 10) + ")"
+	idx := int(i) - 1
+	if i < 1 || idx >= len(_Kind_index)-1 {
+		return "Kind(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _Kind_name[_Kind_index[i]:_Kind_index[i+1]]
+	return _Kind_name[_Kind_index[idx]:_Kind_index[idx+1]]
 }

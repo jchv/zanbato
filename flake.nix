@@ -8,6 +8,10 @@
       url = "github:kaitai-io/kaitai_struct_tests";
       flake = false;
     };
+    kaitai_struct_formats = {
+      url = "github:kaitai-io/kaitai_struct_formats";
+      flake = false;
+    };
   };
 
   outputs =
@@ -16,6 +20,7 @@
       nixpkgs,
       flake-utils,
       kaitai_struct_tests,
+      kaitai_struct_formats,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -27,15 +32,19 @@
           postPatch = ''
             mkdir -p internal/third_party
             ln -s ${kaitai_struct_tests} internal/third_party/kaitai_struct_tests
+            ln -s ${kaitai_struct_formats} internal/third_party/kaitai_struct_formats
             find .
           '';
-          vendorHash = "sha256-A9c+c4tNx9xPKic1r2WNn/McBfEvC9y8WZQnHtzxHvU=";
+          vendorHash = "sha256-wvwEthYa55stjXn1oW5YxNkAPZ70aWJt3mEq+kLnewA=";
+
+          # Can't currently run checks in Nix due to impurity. :(
+          doCheck = false;
         };
         format = pkgs.writeShellApplication {
           name = "format";
 
           runtimeInputs = [
-            pkgs.nixfmt-rfc-style
+            pkgs.nixfmt
             pkgs.yamlfmt
             pkgs.go
           ];
@@ -97,6 +106,15 @@
           nativeBuildInputs = [
             pkgs.go
             pkgs.gopls
+          ];
+        };
+        devShells.validate = pkgs.mkShell {
+          inputsFrom = [ zanbato ];
+          nativeBuildInputs = [
+            pkgs.go
+            pkgs.gopls
+            pkgs.jdk
+            pkgs.sbt
           ];
         };
       }

@@ -3,7 +3,7 @@ package eval
 import (
 	"io"
 
-	"github.com/kaitai-io/kaitai_struct_go_runtime/kaitai"
+	"github.com/jchw-forks/kaitai_struct_go_runtime/kaitai"
 )
 
 type StreamReader interface {

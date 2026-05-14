@@ -1,0 +1,5 @@
+id: zb_enum_negative
+data: zb_enum_negative.bin
+asserts:
+  - actual: val
+    expected: zb_enum_negative::sign::negative

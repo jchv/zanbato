@@ -1,0 +1,7 @@
+id: zb_valid_contents
+data: zb_valid_contents.bin
+asserts:
+  - actual: magic
+    expected: '[0x89, 0x50, 0x4E, 0x47]'
+  - actual: crlf
+    expected: '[0x0D, 0x0A]'

@@ -1,0 +1,15 @@
+id: zb_switch_repeat_eos
+data: zb_switch_on_int.bin
+asserts:
+  - actual: entries.size
+    expected: 3
+  - actual: entries[0].tag
+    expected: 1
+  - actual: entries[0].body.as<zb_switch_repeat_eos::entry::small_body>.val
+    expected: 0x1234
+  - actual: entries[1].tag
+    expected: 2
+  - actual: entries[1].body.as<zb_switch_repeat_eos::entry::large_body>.val
+    expected: 0xDEADBEEF
+  - actual: entries[2].tag
+    expected: 1

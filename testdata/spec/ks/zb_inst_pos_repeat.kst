@@ -1,0 +1,11 @@
+id: zb_inst_pos_repeat
+data: zb_inst_pos_repeat.bin
+asserts:
+  - actual: count
+    expected: 3
+  - actual: entries[0].val
+    expected: 100
+  - actual: entries[1].val
+    expected: 200
+  - actual: entries[2].val
+    expected: 300

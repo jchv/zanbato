@@ -1,0 +1,13 @@
+id: zb_switch_on_enum
+data: zb_switch_on_enum.bin
+asserts:
+  - actual: records.size
+    expected: 3
+  - actual: records[0].tag
+    expected: zb_switch_on_enum::record::record_type::small
+  - actual: records[0].body.as<zb_switch_on_enum::record::type_a>.val
+    expected: 0x1234
+  - actual: records[1].tag
+    expected: zb_switch_on_enum::record::record_type::large
+  - actual: records[1].body.as<zb_switch_on_enum::record::type_b>.val
+    expected: 0xDEADBEEF

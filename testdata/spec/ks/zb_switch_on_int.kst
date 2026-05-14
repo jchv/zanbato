@@ -1,0 +1,15 @@
+id: zb_switch_on_int
+data: zb_switch_on_int.bin
+asserts:
+  - actual: records.size
+    expected: 3
+  - actual: records[0].tag
+    expected: 1
+  - actual: records[0].body.as<zb_switch_on_int::record::type_a>.val
+    expected: 0x1234
+  - actual: records[1].tag
+    expected: 2
+  - actual: records[1].body.as<zb_switch_on_int::record::type_b>.val
+    expected: 0xDEADBEEF
+  - actual: records[2].body.as<zb_switch_on_int::record::type_a>.val
+    expected: 0x5678

@@ -1,0 +1,11 @@
+id: zb_if_inst
+data: zb_inst_conditional.bin
+asserts:
+  - actual: flag
+    expected: 1
+  - actual: val
+    expected: 42
+  - actual: computed
+    expected: 50
+  - actual: always
+    expected: 42

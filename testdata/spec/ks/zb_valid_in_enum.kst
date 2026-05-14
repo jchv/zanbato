@@ -1,0 +1,3 @@
+id: zb_valid_in_enum
+data: zb_valid_in_enum.bin
+exception: ValidationNotAnyOfError

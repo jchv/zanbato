@@ -1,0 +1,13 @@
+id: zb_expr_bitwise
+data: zb_expr_bitwise.bin
+asserts:
+  - actual: val
+    expected: 0xDEADBEEF
+  - actual: shr_8
+    expected: 0xDEADBE
+  - actual: band
+    expected: 0xEF
+  - actual: bor
+    expected: 0xFFADBEEF
+  - actual: bxor
+    expected: 0x21524110

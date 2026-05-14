@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"strings"
 
 	"github.com/jchv/zanbato/kaitai/expr"
 	"github.com/jchv/zanbato/kaitai/ksy"
@@ -31,6 +32,9 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 	}
 
 	result.Meta.Imports = typ.Meta.Imports
+	result.Meta.Encoding = typ.Meta.Encoding
+	result.Meta.OpaqueTypes = typ.Meta.KSOpaqueTypes
+	result.Meta.Debug = typ.Meta.KSDebug
 
 	if typ.Meta.Endian.Value == "le" {
 		result.Meta.Endian.Kind = types.LittleEndian
@@ -74,19 +78,29 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 		}
 		result.Params = append(result.Params, param)
 	}
+	anonIdx := 0
 	for _, spec := range typ.Seq {
-		attr, err := translateAttrSpec(spec)
+		attr, err := translateAttrSpec(spec, typ.Meta.Encoding)
 		if err != nil {
 			return nil, err
+		}
+		if attr.ID == "" {
+			attr.ID = Identifier(fmt.Sprintf("_unnamed%d", anonIdx))
+			anonIdx++
 		}
 		result.Seq = append(result.Seq, attr)
 	}
 	for _, spec := range typ.Types {
-		typ, err := translateTypeSpec(Identifier(spec.Meta.ID), spec)
+		// Inherit meta encoding from parent if child doesn't have its own
+		childSpec := spec
+		if childSpec.Meta.Encoding == "" && typ.Meta.Encoding != "" {
+			childSpec.Meta.Encoding = typ.Meta.Encoding
+		}
+		child, err := translateTypeSpec(Identifier(childSpec.Meta.ID), childSpec)
 		if err != nil {
 			return nil, err
 		}
-		result.Structs = append(result.Structs, typ)
+		result.Structs = append(result.Structs, child)
 	}
 	for _, spec := range typ.Enums {
 		enum, err := translateEnumSpec(Identifier(spec.ID), spec)
@@ -96,12 +110,13 @@ func translateTypeSpec(id Identifier, typ ksy.TypeSpec) (*Struct, error) {
 		result.Enums = append(result.Enums, enum)
 	}
 	for _, spec := range typ.Instances.Instances {
-		instance, err := translateInstanceSpec(spec)
+		instance, err := translateInstanceSpec(spec, typ.Meta.Encoding)
 		if err != nil {
 			return nil, err
 		}
 		result.Instances = append(result.Instances, instance)
 	}
+	result.ToString = typ.ToString
 	return result, nil
 }
 
@@ -118,24 +133,8 @@ func translateParamSpec(param ksy.ParamSpec) (*Param, error) {
 	}, nil
 }
 
-func translateAttrSpec(attr ksy.AttributeSpec) (*Attr, error) {
-	typ, err := types.ParseAttrType(attr, false)
-	if err != nil {
-		return nil, err
-	}
-	return &Attr{
-		ID:       Identifier(attr.ID),
-		Doc:      attr.Doc,
-		Contents: attr.Contents,
-		Type:     typ,
-		Repeat:   types.ParseRepeat(attr),
-		Process:  expr.MustParseExpr(attr.Process),
-		If:       expr.MustParseExpr(attr.If),
-		Enum:     attr.Enum,
-		Pos:      expr.MustParseExpr(attr.Pos),
-		IO:       expr.MustParseExpr(attr.IO),
-		Value:    expr.MustParseExpr(attr.Value),
-	}, nil
+func translateAttrSpec(attr ksy.AttributeSpec, defaultEncoding string) (*Attr, error) {
+	return buildAttr(Identifier(attr.ID), attr, defaultEncoding, false)
 }
 
 func translateEnumSpec(id Identifier, typ ksy.EnumSpec) (*Enum, error) {
@@ -149,23 +148,81 @@ func translateEnumSpec(id Identifier, typ ksy.EnumSpec) (*Enum, error) {
 	return result, nil
 }
 
-func translateInstanceSpec(spec ksy.InstanceSpecItem) (*Attr, error) {
-	typ, err := types.ParseAttrType(ksy.AttributeSpec(spec.Value), true)
+func translateInstanceSpec(spec ksy.InstanceSpecItem, defaultEncoding string) (*Attr, error) {
+	return buildAttr(Identifier(spec.Key), ksy.AttributeSpec(spec.Value), defaultEncoding, true)
+}
+
+func buildAttr(id Identifier, attr ksy.AttributeSpec, defaultEncoding string, instance bool) (*Attr, error) {
+	// Propagate meta-level encoding to string attrs that don't have their own.
+	if attr.Encoding == "" && defaultEncoding != "" {
+		typVal := strings.TrimSpace(attr.Type.Value)
+		if typVal == "str" || typVal == "strz" {
+			attr.Encoding = defaultEncoding
+		}
+	}
+	typ, err := types.ParseAttrType(attr, instance)
 	if err != nil {
 		return nil, err
 	}
+
+	repeat, err := types.ParseRepeat(attr)
+	if err != nil {
+		return nil, fmt.Errorf("parsing repeat expression for attr %q: %w", id, err)
+	}
+
+	parseOptionalExpr := func(name, src string) (*expr.Expr, error) {
+		parsed, err := expr.ParseExpr(src)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s expression for attr %q: %w", name, id, err)
+		}
+		return parsed, nil
+	}
+
+	process, err := parseOptionalExpr("process", attr.Process)
+	if err != nil {
+		return nil, err
+	}
+	ifExpr, err := parseOptionalExpr("if", attr.If)
+	if err != nil {
+		return nil, err
+	}
+	pos, err := parseOptionalExpr("pos", attr.Pos)
+	if err != nil {
+		return nil, err
+	}
+	size, err := parseOptionalExpr("size", attr.Size)
+	if err != nil {
+		return nil, err
+	}
+	ioExpr, err := parseOptionalExpr("io", attr.IO)
+	if err != nil {
+		return nil, err
+	}
+	value, err := parseOptionalExpr("value", attr.Value)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Attr{
-		ID:       Identifier(spec.Key),
-		Doc:      spec.Value.Doc,
-		Contents: spec.Value.Contents,
-		Type:     typ,
-		Repeat:   types.ParseRepeat(ksy.AttributeSpec(spec.Value)),
-		Process:  expr.MustParseExpr(spec.Value.Process),
-		If:       expr.MustParseExpr(spec.Value.If),
-		Enum:     spec.Value.Enum,
-		Pos:      expr.MustParseExpr(spec.Value.Pos),
-		Size:     expr.MustParseExpr(spec.Value.Size),
-		IO:       expr.MustParseExpr(spec.Value.IO),
-		Value:    expr.MustParseExpr(spec.Value.Value),
+		ID:         id,
+		Doc:        attr.Doc,
+		Contents:   attr.Contents,
+		Type:       typ,
+		Repeat:     repeat,
+		Process:    process,
+		If:         ifExpr,
+		Valid:      attr.Valid,
+		Enum:       attr.Enum,
+		Pos:        pos,
+		Size:       size,
+		SizeEos:    attr.SizeEos,
+		IO:         ioExpr,
+		Value:      value,
+		Parent:     attr.Parent,
+		Terminator: attr.Terminator,
+		PadRight:   attr.PadRight,
+		Consume:    attr.Consume,
+		Include:    attr.Include,
+		EosError:   attr.EosError,
 	}, nil
 }

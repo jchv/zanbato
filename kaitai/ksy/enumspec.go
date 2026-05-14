@@ -47,9 +47,12 @@ func (e *EnumValuePairsSpec) UnmarshalYAML(node *yaml.Node) error {
 		}
 		switch value.Tag {
 		case "!!map":
-			if err := value.Decode(&item.Spec); err != nil {
-
-			}
+			// Map-shaped enum entries (with `doc:`, `doc-ref:` etc.) decode
+			// into item.Spec. We intentionally tolerate decode failures
+			// here so partially-formed entries still register their value;
+			// the surrounding parser will catch any required-field issues
+			// when it actually uses the enum.
+			_ = value.Decode(&item.Spec)
 		default:
 			if err := value.Decode(&item.Spec.ID); err != nil {
 				return err

@@ -34,10 +34,11 @@ const _BuiltinMethod_name = "InvalidMethodMethodIntToStringMethodFloatToIntMetho
 var _BuiltinMethod_index = [...]uint16{0, 13, 30, 46, 67, 90, 108, 127, 148, 165, 180, 195, 211, 226, 241, 255, 269, 284, 300, 315}
 
 func (i BuiltinMethod) String() string {
-	if i < 0 || i >= BuiltinMethod(len(_BuiltinMethod_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_BuiltinMethod_index)-1 {
 		return "BuiltinMethod(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _BuiltinMethod_name[_BuiltinMethod_index[i]:_BuiltinMethod_index[i+1]]
+	return _BuiltinMethod_name[_BuiltinMethod_index[idx]:_BuiltinMethod_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -70,8 +71,9 @@ const _ExprKind_name = "InvalidKindRootKindStreamKindMethodKindStructParentKindS
 var _ExprKind_index = [...]uint8{0, 11, 19, 29, 39, 55, 69, 80, 89, 100, 109, 122, 132, 142, 150, 163, 172, 180, 192, 207, 216}
 
 func (i ExprKind) String() string {
-	if i < 0 || i >= ExprKind(len(_ExprKind_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_ExprKind_index)-1 {
 		return "ExprKind(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _ExprKind_name[_ExprKind_index[i]:_ExprKind_index[i+1]]
+	return _ExprKind_name[_ExprKind_index[idx]:_ExprKind_index[idx+1]]
 }

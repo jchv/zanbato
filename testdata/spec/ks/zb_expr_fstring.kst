@@ -1,0 +1,11 @@
+id: zb_expr_fstring
+data: zb_expr_fstring.bin
+asserts:
+  - actual: name
+    expected: '"Hi"'
+  - actual: val
+    expected: 42
+  - actual: greeting
+    expected: '"hello_Hi"'
+  - actual: sum_label
+    expected: '"sum=10"'

@@ -1,0 +1,11 @@
+id: zb_expr_to_s_base
+data: zb_expr_to_s_base.bin
+asserts:
+  - actual: val
+    expected: 255
+  - actual: decimal
+    expected: '"255"'
+  - actual: hex
+    expected: '"ff"'
+  - actual: octal
+    expected: '"52"'

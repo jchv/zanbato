@@ -6,7 +6,8 @@ import (
 )
 
 type Range struct {
-	StartIndex, EndIndex uint64
+	StartIndex uint64 `json:"startIndex"`
+	EndIndex   uint64 `json:"endIndex"`
 }
 
 type PathItem struct {

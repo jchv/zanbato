@@ -1,0 +1,15 @@
+id: zb_expr_str_methods
+data: zb_expr_str_methods.bin
+asserts:
+  - actual: str_val
+    expected: '"12345"'
+  - actual: num_val
+    expected: 42
+  - actual: str_len
+    expected: 5
+  - actual: str_rev
+    expected: '"54321"'
+  - actual: str_sub
+    expected: '"234"'
+  - actual: num_str
+    expected: '"42"'

@@ -1,0 +1,15 @@
+id: zb_repeat_eos_mixed
+data: zb_repeat_eos_mixed.bin
+asserts:
+  - actual: entries.size
+    expected: 3
+  - actual: entries[0].tag
+    expected: 1
+  - actual: entries[0].data
+    expected: '[0xAA, 0xBB]'
+  - actual: entries[1].tag
+    expected: 2
+  - actual: entries[2].tag
+    expected: 3
+  - actual: entries[2].data
+    expected: '[0xEE, 0xFF]'

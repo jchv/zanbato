@@ -1,0 +1,11 @@
+id: zb_process_repeat
+data: zb_process_repeat.bin
+asserts:
+  - actual: count
+    expected: 2
+  - actual: entries.size
+    expected: 2
+  - actual: entries[0]
+    expected: '[0x41, 0x42]'
+  - actual: entries[1]
+    expected: '[0x43, 0x44]'

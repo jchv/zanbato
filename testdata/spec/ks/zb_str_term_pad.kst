@@ -1,0 +1,9 @@
+id: zb_str_term_pad
+data: zb_str_term_pad.bin
+asserts:
+  - actual: padded
+    expected: '"abc"'
+  - actual: terminated
+    expected: '"foo"'
+  - actual: sized
+    expected: '"world"'

@@ -1,0 +1,7 @@
+id: zb_if_basic
+data: zb_if_basic.bin
+asserts:
+  - actual: flag
+    expected: 1
+  - actual: data
+    expected: 0x12345678

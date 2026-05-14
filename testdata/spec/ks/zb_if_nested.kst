@@ -1,0 +1,11 @@
+id: zb_if_nested
+data: zb_if_nested.bin
+asserts:
+  - actual: flag_a
+    expected: 1
+  - actual: flag_b
+    expected: 0
+  - actual: val_a
+    expected: 0xAA
+  - actual: val_c
+    expected: 0xCC

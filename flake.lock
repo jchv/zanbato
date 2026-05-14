@@ -18,14 +18,30 @@
         "type": "github"
       }
     },
+    "kaitai_struct_formats": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1777972357,
+        "narHash": "sha256-QWU5yH65VIypOQDsWCmB/oV5LMCv/xaBm2cssFDGMnw=",
+        "owner": "kaitai-io",
+        "repo": "kaitai_struct_formats",
+        "rev": "825fb466261eaae6678a7c7f0cbd45aeecf79012",
+        "type": "github"
+      },
+      "original": {
+        "owner": "kaitai-io",
+        "repo": "kaitai_struct_formats",
+        "type": "github"
+      }
+    },
     "kaitai_struct_tests": {
       "flake": false,
       "locked": {
-        "lastModified": 1768664927,
-        "narHash": "sha256-KfL/8AiTo7HALViUVr8pBJonmpleTui4xAXxXAMIxD4=",
+        "lastModified": 1777845409,
+        "narHash": "sha256-6O2U7Zm7AeZRIifrWXKCRSGJ2B5vxLXA+TznbsOpQfM=",
         "owner": "kaitai-io",
         "repo": "kaitai_struct_tests",
-        "rev": "3d70f1ef026d21aa17c40485d7c572a1d225a450",
+        "rev": "59afee013e1a8e5fb894ca99838f55ef7b329cb3",
         "type": "github"
       },
       "original": {
@@ -36,11 +52,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1771270986,
-        "narHash": "sha256-zBKKP+3hvjZpqOFHqadvsX91QeheI+OwwhpPysRMGSU=",
+        "lastModified": 1778978704,
+        "narHash": "sha256-MbSs4y7tDAGeD9df5Skn3Nh+ECfk+IulVw4zl9eRy50=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "a399724147050d4070a23aeca144cca59495ee37",
+        "rev": "d5d5f7ba933ff3f7ef2b428c7da168367480857f",
         "type": "github"
       },
       "original": {
@@ -52,6 +68,7 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
+        "kaitai_struct_formats": "kaitai_struct_formats",
         "kaitai_struct_tests": "kaitai_struct_tests",
         "nixpkgs": "nixpkgs"
       }

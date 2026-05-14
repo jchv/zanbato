@@ -1,0 +1,7 @@
+id: zb_switch_default
+data: zb_switch_default.bin
+asserts:
+  - actual: tag
+    expected: 99
+  - actual: body.as<zb_switch_default::fallback_type>.data
+    expected: '[0xDE, 0xAD, 0xBE, 0xEF]'

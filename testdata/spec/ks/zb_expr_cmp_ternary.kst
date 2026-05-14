@@ -1,0 +1,21 @@
+id: zb_expr_cmp_ternary
+data: zb_expr_cmp_ternary.bin
+asserts:
+  - actual: a
+    expected: 10
+  - actual: b
+    expected: 20
+  - actual: is_eq
+    expected: false
+  - actual: is_ne
+    expected: true
+  - actual: is_lt
+    expected: true
+  - actual: is_le
+    expected: true
+  - actual: is_gt
+    expected: false
+  - actual: is_ge
+    expected: false
+  - actual: tern_result
+    expected: 10

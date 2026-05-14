@@ -1,0 +1,7 @@
+id: zb_valid_eq_pass
+data: zb_valid_eq_pass.bin
+asserts:
+  - actual: magic
+    expected: '[0x4B, 0x53, 0x54, 0x21]'
+  - actual: payload
+    expected: 42

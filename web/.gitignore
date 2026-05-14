@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.vite/
+*.log
+public/zanbato.wasm
+public/wasm_exec.js
+*.tsbuildinfo

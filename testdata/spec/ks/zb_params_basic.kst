@@ -1,0 +1,7 @@
+id: zb_params_basic
+data: zb_params_basic.bin
+asserts:
+  - actual: data_len
+    expected: 5
+  - actual: body.content
+    expected: '[0x48, 0x45, 0x4C, 0x4C, 0x4F]'

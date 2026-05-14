@@ -1,0 +1,7 @@
+id: zb_switch_int_arith
+data: zb_switch_int_arith.bin
+asserts:
+  - actual: tag
+    expected: 1
+  - actual: doubled
+    expected: 84

@@ -1,0 +1,7 @@
+id: zb_params_enum
+data: zb_params_enum.bin
+asserts:
+  - actual: mode
+    expected: zb_params_enum::mode_type::short
+  - actual: body.content.as<zb_params_enum::data_block::short_data>.val
+    expected: 0x1234

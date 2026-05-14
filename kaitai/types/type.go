@@ -172,6 +172,7 @@ type BitsType struct {
 type BytesType struct {
 	Size       *expr.Expr
 	SizeEOS    bool
+	PadRight   int
 	Terminator int
 	Consume    bool
 	Include    bool
@@ -183,6 +184,7 @@ type StringType struct {
 	Size       *expr.Expr
 	SizeEOS    bool
 	Encoding   string
+	PadRight   int
 	Terminator int
 	Consume    bool
 	Include    bool
@@ -204,17 +206,47 @@ type TypeSwitch struct {
 }
 
 type TypeRef struct {
-	Kind   Kind
-	Bits   *BitsType
-	Bytes  *BytesType
-	String *StringType
-	User   *UserType
+	Kind    Kind
+	Bits    *BitsType
+	Bytes   *BytesType
+	String  *StringType
+	User    *UserType
+	IsArray bool // true for array types like u2[], str[], etc.
 }
 
 // Type contains data for a type specification.
 type Type struct {
 	TypeRef    *TypeRef
 	TypeSwitch *TypeSwitch
+}
+
+// setSize sets the size expression on the appropriate sub-type.
+func (t *TypeRef) setSize(e *expr.Expr) {
+	switch t.Kind {
+	case Bytes:
+		t.Bytes.Size = e
+	case String:
+		t.String.Size = e
+	default:
+		t.User.Size = e
+	}
+}
+
+// setStreamAttr sets a stream-level attribute (pad-right, terminator, etc.)
+// on BytesType or StringType. User types silently accept (handled at stream level).
+// Returns an error for unsupported kinds.
+func (t *TypeRef) setStreamAttr(name string, fn func(b *BytesType, s *StringType)) error {
+	switch t.Kind {
+	case Bytes:
+		fn(t.Bytes, nil)
+	case String:
+		fn(nil, t.String)
+	case User:
+		// Silently accept - handled at the stream level.
+	default:
+		return fmt.Errorf("%s on type %s not supported", name, t.Kind)
+	}
+	return nil
 }
 
 func (t TypeRef) FoldEndian(endian EndianKind) TypeRef {
@@ -394,22 +426,14 @@ func ParseAttrType(attr ksy.AttributeSpec, instance bool) (Type, error) {
 			if err != nil {
 				return Type{}, err
 			}
-			switch typ.Kind {
-			case Bytes:
-				typ.Bytes.Size = sizeExpr
-			case String:
-				typ.String.Size = sizeExpr
-			default:
-				typ.User.Size = sizeExpr
-			}
+			typ.setSize(sizeExpr)
 		}
 
 		if attr.Contents != nil {
+			contentsSize := &expr.Expr{Root: expr.IntNode{Integer: big.NewInt(int64(len(attr.Contents)))}}
 			switch typ.Kind {
-			case Bytes:
-				typ.Bytes.Size = &expr.Expr{Root: expr.IntNode{Integer: big.NewInt(int64(len(attr.Contents)))}}
-			case String:
-				typ.String.Size = &expr.Expr{Root: expr.IntNode{Integer: big.NewInt(int64(len(attr.Contents)))}}
+			case Bytes, String:
+				typ.setSize(contentsSize)
 			default:
 				return Type{}, fmt.Errorf("contents on type %s not supported", typ.Kind)
 			}
@@ -422,7 +446,6 @@ func ParseAttrType(attr ksy.AttributeSpec, instance bool) (Type, error) {
 			case String:
 				typ.String.SizeEOS = attr.SizeEos
 			default:
-				// TODO: implement some interface for diagnostics
 				log.Printf("warning: size-eos on type %s does not do anything", typ.Kind)
 			}
 		}
@@ -436,47 +459,68 @@ func ParseAttrType(attr ksy.AttributeSpec, instance bool) (Type, error) {
 			}
 		}
 
+		if attr.PadRight != nil {
+			if err := typ.setStreamAttr("pad-right", func(b *BytesType, s *StringType) {
+				if b != nil {
+					b.PadRight = *attr.PadRight
+				}
+				if s != nil {
+					s.PadRight = *attr.PadRight
+				}
+			}); err != nil {
+				return Type{}, err
+			}
+		}
+
 		if attr.Terminator != nil {
-			switch typ.Kind {
-			case Bytes:
-				typ.Bytes.Terminator = *attr.Terminator
-			case String:
-				typ.String.Terminator = *attr.Terminator
-			default:
-				return Type{}, fmt.Errorf("terminator on type %s not supported", typ.Kind)
+			if err := typ.setStreamAttr("terminator", func(b *BytesType, s *StringType) {
+				if b != nil {
+					b.Terminator = *attr.Terminator
+				}
+				if s != nil {
+					s.Terminator = *attr.Terminator
+				}
+			}); err != nil {
+				return Type{}, err
 			}
 		}
 
 		if attr.Consume != nil {
-			switch typ.Kind {
-			case Bytes:
-				typ.Bytes.Consume = *attr.Consume
-			case String:
-				typ.String.Consume = *attr.Consume
-			default:
-				return Type{}, fmt.Errorf("consume on type %s not supported", typ.Kind)
+			if err := typ.setStreamAttr("consume", func(b *BytesType, s *StringType) {
+				if b != nil {
+					b.Consume = *attr.Consume
+				}
+				if s != nil {
+					s.Consume = *attr.Consume
+				}
+			}); err != nil {
+				return Type{}, err
 			}
 		}
 
 		if attr.Include != nil {
-			switch typ.Kind {
-			case Bytes:
-				typ.Bytes.Include = *attr.Include
-			case String:
-				typ.String.Include = *attr.Include
-			default:
-				return Type{}, fmt.Errorf("include on type %s not supported", typ.Kind)
+			if err := typ.setStreamAttr("include", func(b *BytesType, s *StringType) {
+				if b != nil {
+					b.Include = *attr.Include
+				}
+				if s != nil {
+					s.Include = *attr.Include
+				}
+			}); err != nil {
+				return Type{}, err
 			}
 		}
 
 		if attr.EosError != nil {
-			switch typ.Kind {
-			case Bytes:
-				typ.Bytes.EosError = *attr.EosError
-			case String:
-				typ.String.EosError = *attr.EosError
-			default:
-				return Type{}, fmt.Errorf("eos-error on type %s not supported", typ.Kind)
+			if err := typ.setStreamAttr("eos-error", func(b *BytesType, s *StringType) {
+				if b != nil {
+					b.EosError = *attr.EosError
+				}
+				if s != nil {
+					s.EosError = *attr.EosError
+				}
+			}); err != nil {
+				return Type{}, err
 			}
 		}
 
@@ -495,7 +539,7 @@ func parseUserType(typestr string) (TypeRef, error) {
 			return TypeRef{}, errors.New("missing ) in type params")
 		}
 		result.Name = typestr[:i]
-		params := strings.Split(typestr[i+1:j], ",")
+		params := splitParamsAware(typestr[i+1 : j])
 		for i, src := range params {
 			param, err := expr.ParseExpr(src)
 			if err != nil {
@@ -507,22 +551,86 @@ func parseUserType(typestr string) (TypeRef, error) {
 	return TypeRef{Kind: User, User: &result}, nil
 }
 
+// splitParamsAware splits a param string on commas, but respects nested
+// brackets and parentheses so that expressions like [a, b] aren't split.
+func splitParamsAware(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+
+	var result []string
+	depth := 0
+	start := 0
+	var quote rune
+	escaped := false
+	for i, c := range s {
+		if quote != 0 {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if c == '\\' {
+				escaped = true
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+
+		switch c {
+		case '"', '\'':
+			quote = c
+		case '[', '(':
+			depth++
+		case ']', ')':
+			depth--
+		case ',':
+			if depth == 0 {
+				result = append(result, s[start:i])
+				start = i + 1
+			}
+		}
+	}
+	result = append(result, s[start:])
+	return result
+}
+
 // ParseTypeRef parses a type from a type string.
 func ParseTypeRef(typestr string) (TypeRef, error) {
+	// Handle array type suffix (e.g., "u2[]", "str[]", "my_type[]")
+	isArray := false
+	if strings.HasSuffix(typestr, "[]") {
+		isArray = true
+		typestr = typestr[:len(typestr)-2]
+	}
+	ref, err := parseTypeRefInner(typestr)
+	if err != nil {
+		return ref, err
+	}
+	ref.IsArray = isArray
+	return ref, nil
+}
+
+func parseTypeRefInner(typestr string) (TypeRef, error) {
 	if kind, ok := parseBasicDataType(typestr); ok {
 		result := TypeRef{}
 		result.Kind = kind
 		switch kind {
 		case Bytes:
 			result.Bytes = &BytesType{
-				Consume:  true,
-				EosError: true,
+				PadRight:   -1,
+				Terminator: -1,
+				Consume:    true,
+				EosError:   true,
 			}
 		case String:
 			result.String = &StringType{
+				PadRight:   -1,
+				Terminator: -1,
 				Consume:    true,
 				EosError:   true,
-				Terminator: -1,
 			}
 			if typestr == "strz" {
 				result.String.Terminator = 0

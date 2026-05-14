@@ -1,0 +1,13 @@
+id: zb_if_calc
+data: zb_if_calc.bin
+asserts:
+  - actual: has_extra
+    expected: 1
+  - actual: extra_val
+    expected: 100
+  - actual: main_val
+    expected: 200
+  - actual: tag
+    expected: 0xFF
+  - actual: combined
+    expected: 300

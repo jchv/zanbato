@@ -1,0 +1,168 @@
+.project-panel {
+  height: 100%;
+  overflow: auto;
+  font-family: ui-sans-serif, sans-serif;
+  font-size: 12px;
+  line-height: 22px;
+  background: #0e1419;
+  color: #c5c5c5;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.project-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5ch;
+  padding-right: 8px;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.project-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.project-row--dir {
+  cursor: pointer;
+}
+
+.project-row--ksy,
+.project-row--bin {
+  cursor: pointer;
+}
+
+/* Currently-selected KSY (the parse target - drives the tree). */
+.project-row--current-ksy {
+  background: rgba(81, 153, 252, 0.18);
+  color: #ffffff;
+}
+
+.project-row--current-ksy:hover {
+  background: rgba(81, 153, 252, 0.25);
+}
+
+/* The KSY currently open in the editor, when different from the
+   current parse target. A left-edge stripe rather than a background
+   so it doesn't clash with selection / hover states. */
+.project-row--editor-ksy {
+  box-shadow: inset 2px 0 0 0 rgba(81, 153, 252, 0.55);
+}
+
+.project-row--current-bin {
+  background: rgba(255, 195, 0, 0.15);
+  color: #ffffff;
+}
+
+.project-row--current-bin:hover {
+  background: rgba(255, 195, 0, 0.22);
+}
+
+.project-row--drop-target {
+  background: rgba(81, 153, 252, 0.25);
+  outline: 1px dashed rgba(81, 153, 252, 0.7);
+  outline-offset: -1px;
+}
+
+.project-disclosure {
+  flex: none;
+  width: 12px;
+  text-align: center;
+  font-size: 9px;
+  color: #889096;
+}
+
+.project-disclosure--leaf {
+  width: 12px;
+}
+
+.project-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: #889096;
+  margin-right: 2px;
+}
+
+.project-row--ksy .project-icon {
+  color: #7aa2c7;
+}
+
+.project-row--current-ksy .project-icon,
+.project-row--current-bin .project-icon {
+  color: #ffffff;
+}
+
+.project-row--bin .project-icon {
+  color: #6b7280;
+}
+
+.project-name {
+  font-family: ui-monospace, monospace;
+}
+
+.project-row--bin .project-name {
+  color: #a8b1be;
+}
+
+/* Radix context menu */
+.ctx-menu {
+  min-width: 180px;
+  background: #1a2028;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+}
+
+.ctx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: ui-sans-serif, sans-serif;
+  color: #c5c5c5;
+  cursor: default;
+  outline: none;
+}
+
+.ctx-menu-item[data-highlighted] {
+  background: rgba(81, 153, 252, 0.25);
+  color: #ffffff;
+}
+
+.ctx-menu-item--destructive {
+  color: #ff8080;
+}
+
+.ctx-menu-item--destructive[data-highlighted] {
+  background: rgba(255, 80, 80, 0.2);
+  color: #ffcccc;
+}
+
+.ctx-menu-separator {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 4px 2px;
+}
+
+.project-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  color: #cbe2ff;
+  font-size: 12px;
+  font-style: italic;
+  pointer-events: none;
+  font-family: ui-sans-serif, sans-serif;
+}
+
+.project-panel {
+  position: relative;
+}

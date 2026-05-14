@@ -1,0 +1,15 @@
+id: zb_inst_array
+data: zb_inst_array.bin
+asserts:
+  - actual: count
+    expected: 4
+  - actual: values[0]
+    expected: 10
+  - actual: values[3]
+    expected: 40
+  - actual: total_elements
+    expected: 4
+  - actual: first_val
+    expected: 10
+  - actual: last_val
+    expected: 40

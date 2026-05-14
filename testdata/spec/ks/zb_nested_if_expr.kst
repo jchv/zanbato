@@ -1,0 +1,13 @@
+id: zb_nested_if_expr
+data: zb_nested_if_expr.bin
+asserts:
+  - actual: flag
+    expected: 1
+  - actual: inner.x
+    expected: 5
+  - actual: inner.y
+    expected: 10
+  - actual: inner.sum
+    expected: 15
+  - actual: extra
+    expected: 0xFF

@@ -1,0 +1,19 @@
+id: zb_expr_int_ops
+data: zb_expr_int_ops.bin
+asserts:
+  - actual: a
+    expected: 100
+  - actual: b
+    expected: 7
+  - actual: c
+    expected: -3
+  - actual: add_ab
+    expected: 107
+  - actual: sub_ab
+    expected: 93
+  - actual: mul_bc
+    expected: -21
+  - actual: div_ab
+    expected: 14
+  - actual: mod_ab
+    expected: 2

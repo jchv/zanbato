@@ -1,0 +1,9 @@
+id: zb_inst_pos_io
+data: zb_inst_pos_io.bin
+asserts:
+  - actual: header_len
+    expected: 8
+  - actual: data_offset
+    expected: 8
+  - actual: payload
+    expected: '[0x48, 0x45, 0x4C, 0x4C, 0x4F]'

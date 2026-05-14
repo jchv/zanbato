@@ -49,7 +49,23 @@ func TestParse(t *testing.T) {
 			Struct: &Struct{
 				ID: "attrs",
 				Seq: []*Attr{
-					{ID: "magic", Type: types.Type{TypeRef: &types.TypeRef{Kind: types.Bytes, Bytes: &types.BytesType{Consume: true, EosError: true, Size: &expr.Expr{Root: expr.IntNode{Integer: big.NewInt(4)}}}}}, Contents: []byte{0x7f, 'E', 'L', 'F'}},
+					{
+						ID: "magic",
+						Type: types.Type{
+							TypeRef: &types.TypeRef{
+								Kind: types.Bytes,
+								Bytes: &types.BytesType{
+									Consume:    true,
+									EosError:   true,
+									PadRight:   -1,
+									Terminator: -1,
+									Size:       &expr.Expr{Root: expr.IntNode{Integer: big.NewInt(4)}},
+								},
+							},
+						},
+						Contents: []byte{0x7f, 'E', 'L', 'F'},
+						Size:     &expr.Expr{Root: expr.IntNode{Integer: big.NewInt(4)}},
+					},
 				},
 			},
 		},
@@ -60,6 +76,37 @@ func TestParse(t *testing.T) {
 			resultStruct, err := ParseStruct(bytes.NewBufferString(test.Source))
 			assert.NoError(t, err)
 			assert.Equal(t, test.Struct, resultStruct)
+		})
+	}
+}
+
+func TestParseInvalidExpressions(t *testing.T) {
+	tests := []struct {
+		Name        string
+		Source      string
+		ErrContains string
+	}{
+		{
+			Name:        "IfExpression",
+			Source:      `{meta: {id: invalid_if}, seq: [{id: x, type: u1, if: "1 anx 2"}]}`,
+			ErrContains: `parsing if expression for attr "x"`,
+		},
+		{
+			Name:        "RepeatExpression",
+			Source:      `{meta: {id: invalid_repeat}, seq: [{id: x, type: u1, repeat: expr, repeat-expr: "1 or2"}]}`,
+			ErrContains: `parsing repeat expression for attr "x"`,
+		},
+		{
+			Name:        "UnterminatedString",
+			Source:      `{meta: {id: invalid_string}, seq: [{id: x, type: u1, if: "\"unterminated"}]}`,
+			ErrContains: "unterminated string literal",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			_, err := ParseStruct(bytes.NewBufferString(test.Source))
+			assert.ErrorContains(t, err, test.ErrContains)
 		})
 	}
 }

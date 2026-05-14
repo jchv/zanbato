@@ -1,0 +1,11 @@
+id: zb_bits_bool_and_int
+data: zb_bits_bool_and_int.bin
+asserts:
+  - actual: flag
+    expected: true
+  - actual: val3
+    expected: 5
+  - actual: val4
+    expected: 10
+  - actual: byte_aligned
+    expected: 255

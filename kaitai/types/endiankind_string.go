@@ -19,8 +19,9 @@ const _EndianKind_name = "UnspecifiedOrderBigEndianLittleEndianSwitchEndian"
 var _EndianKind_index = [...]uint8{0, 16, 25, 37, 49}
 
 func (i EndianKind) String() string {
-	if i < 0 || i >= EndianKind(len(_EndianKind_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_EndianKind_index)-1 {
 		return "EndianKind(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _EndianKind_name[_EndianKind_index[i]:_EndianKind_index[i+1]]
+	return _EndianKind_name[_EndianKind_index[idx]:_EndianKind_index[idx+1]]
 }

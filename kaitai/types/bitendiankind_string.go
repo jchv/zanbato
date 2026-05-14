@@ -18,8 +18,9 @@ const _BitEndianKind_name = "UnspecifiedBitOrderBigBitEndianLittleBitEndian"
 var _BitEndianKind_index = [...]uint8{0, 19, 31, 46}
 
 func (i BitEndianKind) String() string {
-	if i < 0 || i >= BitEndianKind(len(_BitEndianKind_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_BitEndianKind_index)-1 {
 		return "BitEndianKind(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _BitEndianKind_name[_BitEndianKind_index[i]:_BitEndianKind_index[i+1]]
+	return _BitEndianKind_name[_BitEndianKind_index[idx]:_BitEndianKind_index[idx+1]]
 }

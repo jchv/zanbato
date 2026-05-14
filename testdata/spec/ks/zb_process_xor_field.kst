@@ -1,0 +1,7 @@
+id: zb_process_xor_field
+data: zb_process_xor_field.bin
+asserts:
+  - actual: key
+    expected: 0x55
+  - actual: data
+    expected: '[0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48]'

@@ -1,0 +1,13 @@
+id: zb_inst_value_expr
+data: zb_inst_value_expr.bin
+asserts:
+  - actual: a
+    expected: 10
+  - actual: b
+    expected: 3
+  - actual: sum
+    expected: 13
+  - actual: product
+    expected: 30
+  - actual: is_bigger
+    expected: true

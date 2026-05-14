@@ -1,0 +1,11 @@
+id: zb_nav_parent_chain
+data: zb_nav_parent_chain.bin
+asserts:
+  - actual: root_val
+    expected: 42
+  - actual: child.child_val
+    expected: 100
+  - actual: child.grandchild.grandchild_val
+    expected: 7
+  - actual: child.grandchild.root_val_via_parent
+    expected: 42

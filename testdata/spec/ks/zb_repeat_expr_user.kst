@@ -1,0 +1,13 @@
+id: zb_repeat_expr_user
+data: zb_repeat_expr_user.bin
+asserts:
+  - actual: count
+    expected: 3
+  - actual: items.size
+    expected: 3
+  - actual: items[0].val
+    expected: 100
+  - actual: items[1].val
+    expected: 200
+  - actual: items[2].val
+    expected: 300

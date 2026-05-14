@@ -1,0 +1,13 @@
+id: zb_expr_sizeof
+data: zb_expr_sizeof.bin
+asserts:
+  - actual: a
+    expected: 0x11
+  - actual: b
+    expected: 0x2222
+  - actual: sizeof_a
+    expected: 1
+  - actual: sizeof_b
+    expected: 2
+  - actual: sizeof_nested
+    expected: 4

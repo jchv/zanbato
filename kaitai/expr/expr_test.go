@@ -38,6 +38,10 @@ func TestParseExpr(t *testing.T) {
 			Expr:   &Expr{Root: FloatNode{Float: MustParseBigFloat("1.0")}},
 		},
 		{
+			Source: `'ASCII\\x'`,
+			Expr:   &Expr{Root: StringNode{Str: `ASCII\\x`}},
+		},
+		{
 			Source: "1 == 1 ? 2 : 3",
 			Expr: &Expr{Root: TernaryNode{
 				A: BinaryNode{
@@ -60,17 +64,39 @@ func TestParseExpr(t *testing.T) {
 
 func TestParseExprError(t *testing.T) {
 	tests := []struct {
-		Source    string
-		ErrString string
+		Source      string
+		ErrContains string
 	}{
 		{
-			Source:    "(x + 1, 1.0)",
-			ErrString: "error parsing expression at character 8: expected ')'",
+			Source:      "(x + 1, 1.0)",
+			ErrContains: "expected ')'",
+		},
+		{
+			Source:      `"unterminated`,
+			ErrContains: "unterminated string literal",
+		},
+		{
+			Source:      `"\x"`,
+			ErrContains: "short \\x escape: expected 2 hex digits",
+		},
+		{
+			Source:      "1 anx 2",
+			ErrContains: "unparsed expression text",
+		},
+		{
+			Source:      "1 and2",
+			ErrContains: "unparsed expression text",
+		},
+		{
+			Source:      "1 or2",
+			ErrContains: "unparsed expression text",
 		},
 	}
 
 	for _, test := range tests {
-		_, err := ParseExpr(test.Source)
-		assert.EqualError(t, err, test.ErrString)
+		t.Run(test.Source, func(t *testing.T) {
+			_, err := ParseExpr(test.Source)
+			assert.ErrorContains(t, err, test.ErrContains)
+		})
 	}
 }

@@ -1,0 +1,15 @@
+id: zb_params_multi
+data: zb_params_multi.bin
+asserts:
+  - actual: flag
+    expected: 1
+  - actual: count
+    expected: 3
+  - actual: body.items.size
+    expected: 3
+  - actual: body.items[0]
+    expected: 10
+  - actual: body.items[1]
+    expected: 20
+  - actual: body.items[2]
+    expected: 30

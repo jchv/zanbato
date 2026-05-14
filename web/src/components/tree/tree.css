@@ -1,0 +1,140 @@
+.tree-view {
+  height: 100%;
+  overflow: auto;
+  font-family: ui-sans-serif, sans-serif;
+  font-size: 12px;
+  line-height: 20px;
+  background: #0e1419;
+  color: #c5c5c5;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5ch;
+  padding-right: 8px;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.tree-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tree-row--selected {
+  background: rgba(81, 153, 252, 0.25);
+  color: #ffffff;
+}
+
+.tree-row--selected:hover {
+  background: rgba(81, 153, 252, 0.3);
+}
+
+.tree-disclosure {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font-size: 9px;
+  color: #889096;
+  cursor: pointer;
+}
+
+.tree-disclosure:hover {
+  color: #ffffff;
+}
+
+.tree-disclosure--leaf {
+  cursor: default;
+  pointer-events: none;
+}
+
+.tree-name {
+  color: #d6d6d6;
+  font-family: ui-monospace, monospace;
+}
+
+.tree-row--selected .tree-name {
+  color: #ffffff;
+}
+
+.tree-kind {
+  color: #6b7280;
+  font-size: 10.5px;
+  text-transform: lowercase;
+}
+
+.tree-type-name {
+  color: #7aa2c7;
+  font-family: ui-monospace, monospace;
+}
+
+.tree-row--selected .tree-type-name {
+  color: #b3d2ef;
+}
+
+.tree-value {
+  color: #a8b1be;
+  font-family: ui-monospace, monospace;
+}
+
+.tree-row--selected .tree-value,
+.tree-row--selected .tree-kind {
+  color: #cbe2ff;
+}
+
+.tree-panel-status {
+  padding: 8px 12px;
+  color: #6b7280;
+  font-style: italic;
+  font-size: 12px;
+  font-family: ui-sans-serif, sans-serif;
+}
+
+.tree-panel-error-wrap {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow: auto;
+  background: #0e1419;
+}
+
+.tree-panel-error {
+  margin: 0;
+  padding: 8px 12px;
+  background: rgba(255, 64, 64, 0.08);
+  border-left: 2px solid rgba(255, 80, 80, 0.6);
+  color: #ff8080;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tree-panel-reload {
+  align-self: flex-start;
+  padding: 5px 14px;
+  background: rgba(81, 153, 252, 0.2);
+  border: 1px solid rgba(81, 153, 252, 0.5);
+  border-radius: 3px;
+  color: #cbe2ff;
+  font-size: 12px;
+  font-family: ui-sans-serif, sans-serif;
+  cursor: pointer;
+}
+
+.tree-panel-reload:hover {
+  background: rgba(81, 153, 252, 0.3);
+}

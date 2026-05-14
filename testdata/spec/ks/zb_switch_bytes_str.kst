@@ -1,0 +1,7 @@
+id: zb_switch_bytes_str
+data: zb_switch_bytes_case.bin
+asserts:
+  - actual: magic
+    expected: '[0x41, 0x42]'
+  - actual: body.as<zb_switch_bytes_str::body_ab>.val
+    expected: 0x1234

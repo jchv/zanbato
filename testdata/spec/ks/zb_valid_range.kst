@@ -1,0 +1,3 @@
+id: zb_valid_range
+data: zb_valid_range.bin
+exception: ValidationGreaterThanError

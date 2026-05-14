@@ -1,0 +1,11 @@
+id: zb_nav_any_typed
+data: zb_nav_any_typed.bin
+asserts:
+  - actual: multiplier
+    expected: 3
+  - actual: entry.tag
+    expected: 1
+  - actual: entry.body.as<zb_nav_any_typed::tagged_entry::body_a>.val
+    expected: 10
+  - actual: entry.body.as<zb_nav_any_typed::tagged_entry::body_a>.scaled
+    expected: 30

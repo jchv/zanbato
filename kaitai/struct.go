@@ -14,9 +14,12 @@ type Param struct {
 
 // Meta contains the relevant metadata information.
 type Meta struct {
-	Endian    types.Endian
-	BitEndian types.BitEndian
-	Imports   []string
+	Endian      types.Endian
+	BitEndian   types.BitEndian
+	Imports     []string
+	Encoding    string
+	OpaqueTypes bool
+	Debug       bool
 }
 
 // Struct contains a Kaitai struct.
@@ -29,4 +32,5 @@ type Struct struct {
 	Instances []*Attr
 	Structs   []*Struct
 	Enums     []*Enum
+	ToString  string
 }

@@ -1,0 +1,66 @@
+.error-boundary {
+  height: 100%;
+  width: 100%;
+  padding: 14px 16px;
+  background: #0e1419;
+  color: #ffb0b0;
+  font-family: ui-sans-serif, sans-serif;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+.error-boundary-title {
+  color: #ff8080;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.error-boundary-message {
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(255, 64, 64, 0.08);
+  border-left: 2px solid rgba(255, 80, 80, 0.6);
+  font-family: ui-monospace, monospace;
+  font-size: 11.5px;
+  color: #ffd0d0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error-boundary-details > summary {
+  cursor: pointer;
+  color: #889096;
+  font-size: 11px;
+  user-select: none;
+}
+
+.error-boundary-stack {
+  margin: 6px 0 0 0;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.35);
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: #a8b1be;
+  white-space: pre-wrap;
+}
+
+.error-boundary-retry {
+  align-self: flex-start;
+  padding: 4px 12px;
+  background: rgba(81, 153, 252, 0.18);
+  border: 1px solid rgba(81, 153, 252, 0.45);
+  border-radius: 3px;
+  color: #cbe2ff;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.error-boundary-retry:hover {
+  background: rgba(81, 153, 252, 0.3);
+}

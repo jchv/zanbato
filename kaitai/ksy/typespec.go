@@ -18,6 +18,7 @@ type TypeSpec struct {
 	Instances InstancesSpec  `yaml:"instances,omitempty"`
 	Doc       string         `yaml:"doc,omitempty"`
 	DocRef    DocRefSpec     `yaml:"doc-ref,omitempty"`
+	ToString  string         `yaml:"to-string,omitempty"`
 }
 
 // TypesSpec represents a list of KaitaiStruct types.

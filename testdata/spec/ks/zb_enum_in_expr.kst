@@ -1,0 +1,5 @@
+id: zb_enum_in_expr
+data: zb_enum_in_expr.bin
+asserts:
+  - actual: pet
+    expected: zb_enum_in_expr::animal::cat

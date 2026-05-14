@@ -1,0 +1,7 @@
+id: zb_params_expr
+data: zb_params_expr.bin
+asserts:
+  - actual: len_field
+    expected: 3
+  - actual: body.data
+    expected: '[0x41, 0x42, 0x43]'

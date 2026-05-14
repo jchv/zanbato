@@ -1,0 +1,13 @@
+id: zb_inst_ternary_type
+data: zb_expr_cmp_ternary.bin
+asserts:
+  - actual: flag
+    expected: 1
+  - actual: a
+    expected: 10
+  - actual: b
+    expected: 20
+  - actual: chosen
+    expected: 10
+  - actual: double_chosen
+    expected: 20

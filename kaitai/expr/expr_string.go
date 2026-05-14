@@ -10,17 +10,19 @@ func _() {
 	var x [1]struct{}
 	_ = x[InvalidUnaryOp-0]
 	_ = x[OpLogicalNot-1]
+	_ = x[OpNegate-2]
 }
 
-const _UnaryOp_name = "InvalidUnaryOpOpLogicalNot"
+const _UnaryOp_name = "InvalidUnaryOpOpLogicalNotOpNegate"
 
-var _UnaryOp_index = [...]uint8{0, 14, 26}
+var _UnaryOp_index = [...]uint8{0, 14, 26, 34}
 
 func (i UnaryOp) String() string {
-	if i < 0 || i >= UnaryOp(len(_UnaryOp_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_UnaryOp_index)-1 {
 		return "UnaryOp(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _UnaryOp_name[_UnaryOp_index[i]:_UnaryOp_index[i+1]]
+	return _UnaryOp_name[_UnaryOp_index[idx]:_UnaryOp_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -52,8 +54,9 @@ const _BinaryOp_name = "InvalidBinaryOpOpAddOpSubOpMultOpDivOpModOpLessThanOpLes
 var _BinaryOp_index = [...]uint8{0, 15, 20, 25, 31, 36, 41, 51, 66, 79, 97, 104, 114, 125, 137, 145, 152, 160, 172, 183}
 
 func (i BinaryOp) String() string {
-	if i < 0 || i >= BinaryOp(len(_BinaryOp_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_BinaryOp_index)-1 {
 		return "BinaryOp(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _BinaryOp_name[_BinaryOp_index[i]:_BinaryOp_index[i+1]]
+	return _BinaryOp_name[_BinaryOp_index[idx]:_BinaryOp_index[idx+1]]
 }

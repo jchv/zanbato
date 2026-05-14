@@ -1,0 +1,9 @@
+id: zb_enum_multi_field
+data: zb_enum_multi_field.bin
+asserts:
+  - actual: pet_1
+    expected: zb_enum_multi_field::animal::dog
+  - actual: pet_2
+    expected: zb_enum_multi_field::animal::cat
+  - actual: pet_3
+    expected: zb_enum_multi_field::animal::chicken

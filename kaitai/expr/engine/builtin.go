@@ -2,7 +2,10 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -49,7 +52,16 @@ func getBuiltin(builtin BuiltinMethod) MethodFn {
 }
 
 func builtinMethodIntToString(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	return NewStringLiteralValue(this.Integer.Value.String()), nil
+	// `.to_s(base)` formats the integer in the requested base; the no-arg
+	// form (`.to_s`) defaults to base 10.
+	base := 10
+	if len(args) > 0 && args[0] != nil && args[0].Kind == IntegerKind && args[0].Integer != nil {
+		b := int(args[0].Integer.Value.Int64())
+		if b >= 2 && b <= 36 {
+			base = b
+		}
+	}
+	return NewStringLiteralValue(this.Integer.Value.Text(base)), nil
 }
 
 func builtinMethodFloatToInt(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
@@ -62,7 +74,23 @@ func builtinMethodByteArrayLength(this *ExprValue, args []*ExprValue) (*ExprValu
 }
 
 func builtinMethodByteArrayToString(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	return nil, errors.New("not implemented")
+	if this == nil {
+		return nil, errors.New("to_s on nil value")
+	}
+	if this.ByteArray != nil {
+		return NewStringLiteralValue(string(this.ByteArray.Value)), nil
+	}
+	// Handle ArrayKind of integers (byte arrays stored as int arrays)
+	if this.Kind == ArrayKind && len(this.Items) > 0 {
+		bs := make([]byte, len(this.Items))
+		for i, item := range this.Items {
+			if item.Kind == IntegerKind && item.Integer != nil {
+				bs[i] = byte(item.Integer.Value.Int64())
+			}
+		}
+		return NewStringLiteralValue(string(bs)), nil
+	}
+	return nil, errors.New("to_s on non-byte-array value")
 }
 
 func builtinMethodStringLength(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
@@ -82,15 +110,49 @@ func builtinMethodStringReverse(this *ExprValue, args []*ExprValue) (*ExprValue,
 }
 
 func builtinMethodStringSubstring(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	return nil, errors.New("not implemented")
+	if len(args) < 2 {
+		return nil, errors.New("substring requires 2 arguments")
+	}
+	s := this.String.Value
+	from := int(args[0].Integer.Value.Int64())
+	to := int(args[1].Integer.Value.Int64())
+	if from < 0 {
+		from = 0
+	}
+	if to > len(s) {
+		to = len(s)
+	}
+	if from > to {
+		from = to
+	}
+	return NewStringLiteralValue(s[from:to]), nil
 }
 
 func builtinMethodStringToInt(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	return nil, errors.New("not implemented")
+	s := this.String.Value
+	base := 10
+	if len(args) > 0 && args[0] != nil && args[0].Integer != nil {
+		base = int(args[0].Integer.Value.Int64())
+	}
+	// Strip leading whitespace. KS semantics raise ConversionError on
+	// trailing non-digit characters, so we don't fall back to prefix parsing.
+	str := strings.TrimSpace(s)
+	val, err := strconv.ParseInt(str, base, 64)
+	if err != nil {
+		return nil, fmt.Errorf("ConversionError: %q is not a valid integer (base %d)", s, base)
+	}
+	return NewIntegerLiteralValue(big.NewInt(val)), nil
 }
 
 func builtinMethodEnumToInt(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	return NewIntegerLiteralValue(this.Type.EnumValue.Value), nil
+	if this.EnumValue != nil {
+		return NewIntegerLiteralValue(this.EnumValue.Value), nil
+	}
+	// For enum values stored as IntegerKind (from runtime evaluator)
+	if this.Integer != nil {
+		return NewIntegerLiteralValue(this.Integer.Value), nil
+	}
+	return nil, errors.New("enum value has no integer representation")
 }
 
 func builtinMethodBoolToInt(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
@@ -126,27 +188,87 @@ func builtinMethodStreamPos(this *ExprValue, args []*ExprValue) (*ExprValue, err
 }
 
 func builtinMethodArrayFirst(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	if len(this.Array.Value) > 0 {
-		return this.Array.Value[0], nil
+	if this.ByteArray != nil && len(this.ByteArray.Value) > 0 {
+		return NewIntegerLiteralValue(big.NewInt(int64(this.ByteArray.Value[0]))), nil
+	}
+	if len(this.Items) > 0 {
+		return this.Items[0], nil
 	}
 	return nil, nil
 }
 
 func builtinMethodArrayLast(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	if len(this.Array.Value) > 0 {
-		return this.Array.Value[len(this.Array.Value)-1], nil
+	if this.ByteArray != nil && len(this.ByteArray.Value) > 0 {
+		return NewIntegerLiteralValue(big.NewInt(int64(this.ByteArray.Value[len(this.ByteArray.Value)-1]))), nil
+	}
+	if len(this.Items) > 0 {
+		return this.Items[len(this.Items)-1], nil
 	}
 	return nil, nil
 }
 
 func builtinMethodArraySize(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	return NewIntegerLiteralValue(big.NewInt(int64(len(this.Array.Value)))), nil
+	if this.ByteArray != nil {
+		return NewIntegerLiteralValue(big.NewInt(int64(len(this.ByteArray.Value)))), nil
+	}
+	if this.Runtime != nil {
+		if n, ok := this.Runtime.Len(); ok {
+			return NewIntegerLiteralValue(big.NewInt(int64(n))), nil
+		}
+	}
+	return NewIntegerLiteralValue(big.NewInt(int64(len(this.Items)))), nil
 }
 
 func builtinMethodArrayMin(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	return nil, errors.New("not implemented")
+	if this.ByteArray != nil {
+		bs := this.ByteArray.Value
+		if len(bs) == 0 {
+			return nil, errors.New("min on empty byte array")
+		}
+		m := bs[0]
+		for _, b := range bs[1:] {
+			if b < m {
+				m = b
+			}
+		}
+		return NewIntegerLiteralValue(big.NewInt(int64(m))), nil
+	}
+	if len(this.Items) == 0 {
+		return nil, errors.New("min on empty array")
+	}
+	min := this.Items[0]
+	for _, item := range this.Items[1:] {
+		less, err := Compare(item, min, CompareLessThan)
+		if err == nil && less {
+			min = item
+		}
+	}
+	return min, nil
 }
 
 func builtinMethodArrayMax(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	return nil, errors.New("not implemented")
+	if this.ByteArray != nil {
+		bs := this.ByteArray.Value
+		if len(bs) == 0 {
+			return nil, errors.New("max on empty byte array")
+		}
+		m := bs[0]
+		for _, b := range bs[1:] {
+			if b > m {
+				m = b
+			}
+		}
+		return NewIntegerLiteralValue(big.NewInt(int64(m))), nil
+	}
+	if len(this.Items) == 0 {
+		return nil, errors.New("max on empty array")
+	}
+	max := this.Items[0]
+	for _, item := range this.Items[1:] {
+		greater, err := Compare(item, max, CompareGreaterThan)
+		if err == nil && greater {
+			max = item
+		}
+	}
+	return max, nil
 }

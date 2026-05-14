@@ -1,0 +1,13 @@
+id: zb_repeat_eos_basic
+data: zb_repeat_eos_basic.bin
+asserts:
+  - actual: values.size
+    expected: 4
+  - actual: values[0]
+    expected: 0x11111111
+  - actual: values[1]
+    expected: 0x22222222
+  - actual: values[2]
+    expected: 0x33333333
+  - actual: values[3]
+    expected: 0x44444444

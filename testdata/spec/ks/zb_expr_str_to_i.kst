@@ -1,0 +1,7 @@
+id: zb_expr_str_to_i
+data: zb_expr_str_to_i.bin
+asserts:
+  - actual: dec_str
+    expected: '"42"'
+  - actual: parsed_dec
+    expected: 42

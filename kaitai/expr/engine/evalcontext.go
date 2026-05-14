@@ -9,6 +9,11 @@ type EvalContext struct {
 	*Context
 	globals map[*ExprValue]*ExprValue
 	stack   *contextStack
+	// OnResolve is an optional callback invoked when RuntimeValue finds no
+	// cached value. It allows lazy resolution of values on demand. If set,
+	// the callback should resolve the value, cache it via PutStack/PutGlobal,
+	// and return it. Return nil if the value cannot be resolved.
+	OnResolve func(typVal *ExprValue) *ExprValue
 }
 
 // NewEvalContext creates a new runtime evaluation context from a type context.
@@ -25,6 +30,8 @@ func (e *EvalContext) SetContext(context *Context) {
 }
 
 // RuntimeValue returns a resolved runtime value for a type value if one exists.
+// If no cached value is found and OnResolve is set, it calls the callback to
+// lazily resolve the value.
 func (e *EvalContext) RuntimeValue(typVal *ExprValue) *ExprValue {
 	for frame := e.stack; frame != nil; frame = frame.parent {
 		if val, ok := frame.values[typVal]; ok {
@@ -33,6 +40,9 @@ func (e *EvalContext) RuntimeValue(typVal *ExprValue) *ExprValue {
 	}
 	if val, ok := e.globals[typVal]; ok {
 		return val
+	}
+	if e.OnResolve != nil {
+		return e.OnResolve(typVal)
 	}
 	return nil
 }

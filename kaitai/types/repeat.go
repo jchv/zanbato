@@ -1,6 +1,8 @@
 package types
 
 import (
+	"errors"
+
 	"github.com/jchv/zanbato/kaitai/expr"
 	"github.com/jchv/zanbato/kaitai/ksy"
 )
@@ -33,17 +35,25 @@ func (RepeatExpr) isRepeatType()  {}
 func (RepeatUntil) isRepeatType() {}
 
 // ParseRepeat parses repeat specifications from attributes.
-func ParseRepeat(spec ksy.AttributeSpec) RepeatType {
+func ParseRepeat(spec ksy.AttributeSpec) (RepeatType, error) {
 	switch spec.Repeat {
 	case ksy.EosRepeatSpec:
-		return RepeatEOS{}
+		return RepeatEOS{}, nil
 	case ksy.ExprRepeatSpec:
-		return RepeatExpr{expr.MustParseExpr(spec.RepeatExpr)}
+		countExpr, err := expr.ParseExpr(spec.RepeatExpr)
+		if err != nil {
+			return nil, err
+		}
+		return RepeatExpr{countExpr}, nil
 	case ksy.UntilRepeatSpec:
-		return RepeatUntil{expr.MustParseExpr(spec.RepeatUntil)}
+		untilExpr, err := expr.ParseExpr(spec.RepeatUntil)
+		if err != nil {
+			return nil, err
+		}
+		return RepeatUntil{untilExpr}, nil
 	case "":
-		return nil
+		return nil, nil
 	default:
-		panic("invalid repeat spec")
+		return nil, errors.New("invalid repeat spec")
 	}
 }

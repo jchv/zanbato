@@ -1,0 +1,167 @@
+.hex-editor-wrap {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #0e1419;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 18px;
+  color: #c5c5c5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.hex-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+  user-select: none;
+  cursor: default;
+}
+
+.hex-editor:focus-visible {
+  outline: 1px solid rgba(81, 153, 252, 0.4);
+  outline-offset: -1px;
+}
+
+.hex-sizer {
+  position: relative;
+  padding-right: 8px;
+}
+
+.hex-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  white-space: pre;
+  padding: 0 8px;
+}
+
+.hex-row:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.hex-offset {
+  color: #5c6370;
+  margin-right: 1ch;
+  user-select: none;
+}
+
+.hex-bytes,
+.hex-ascii {
+  color: #c5c5c5;
+}
+
+.hex-bytes {
+  margin-right: 1ch;
+}
+
+.hex-ascii {
+  color: #889096;
+}
+
+.hex-byte {
+  /* Each byte span sits inline-block so background fills the whole cell
+     (otherwise the gap between line-height and content is visible as a
+     thin unhighlighted strip). */
+  display: inline-block;
+  vertical-align: top;
+  border-radius: 2px;
+}
+
+.hex-byte--pad {
+  color: #2d333b;
+}
+
+.hex-byte--sel {
+  background: rgba(81, 153, 252, 0.35);
+  color: #ffffff;
+}
+
+.hex-byte--sel-inactive {
+  background: rgba(81, 153, 252, 0.18);
+}
+
+.hex-byte--tree-hl {
+  box-shadow: inset 0 -2px 0 0 rgba(255, 195, 0, 0.75);
+}
+
+.hex-byte--caret {
+  outline: 1px solid #5199fc;
+  outline-offset: -1px;
+}
+
+.hex-byte--caret-inactive {
+  outline: 1px solid rgba(81, 153, 252, 0.45);
+  outline-offset: -1px;
+}
+
+.hex-byte--caret-ins {
+  box-shadow: inset 2px 0 0 0 #5199fc;
+}
+
+.hex-byte--caret-ins-inactive {
+  box-shadow: inset 2px 0 0 0 rgba(81, 153, 252, 0.45);
+}
+
+.hex-status {
+  flex: none;
+  display: flex;
+  gap: 0.75rem;
+  padding: 2px 10px;
+  background: rgba(0, 0, 0, 0.45);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: #889096;
+  font-size: 11px;
+  user-select: none;
+}
+
+.hex-status-sep {
+  color: #444b53;
+}
+
+.hex-status-mode {
+  margin-left: auto;
+  color: #d0d0d0;
+  font-weight: 600;
+}
+
+.hex-status-col {
+  color: #889096;
+}
+
+.hex-drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(81, 153, 252, 0.08);
+  border: 2px dashed rgba(81, 153, 252, 0.55);
+  z-index: 10;
+}
+
+.hex-drop-message {
+  padding: 12px 20px;
+  background: rgba(81, 153, 252, 0.15);
+  border-radius: 4px;
+  color: #cbe2ff;
+  font-family: ui-sans-serif, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.hex-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #5c6370;
+  font-style: italic;
+  font-family: ui-sans-serif, sans-serif;
+}

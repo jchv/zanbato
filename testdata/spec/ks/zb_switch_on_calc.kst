@@ -1,0 +1,9 @@
+id: zb_switch_on_calc
+data: zb_switch_on_calc.bin
+asserts:
+  - actual: a
+    expected: 1
+  - actual: b
+    expected: 2
+  - actual: body.as<zb_switch_on_calc::payload_s>.val
+    expected: 0xBEEF

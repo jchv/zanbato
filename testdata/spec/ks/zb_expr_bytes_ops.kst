@@ -1,0 +1,7 @@
+id: zb_expr_bytes_ops
+data: zb_expr_bytes_ops.bin
+asserts:
+  - actual: data
+    expected: '[0x41, 0x42, 0x43, 0x44]'
+  - actual: data_size
+    expected: 4

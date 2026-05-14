@@ -6,7 +6,7 @@ import (
 	"github.com/jchv/zanbato/kaitai"
 	"github.com/jchv/zanbato/kaitai/types"
 
-	kaitai_io "github.com/kaitai-io/kaitai_struct_go_runtime/kaitai"
+	kaitai_io "github.com/jchw-forks/kaitai_struct_go_runtime/kaitai"
 )
 
 //go:generate go run golang.org/x/tools/cmd/stringer -type=BuiltinMethod,ExprKind -output context_string.go
@@ -114,8 +114,14 @@ var FloatSymbolTable = map[string]*ExprValue{
 
 // ByteArraySymbolTable is the static symbol table of byte buffers.
 var ByteArraySymbolTable = map[string]*ExprValue{
-	"length": NewBuiltinMethodValue(MethodByteArrayLength, []ValueType{}, IntegerValueType),
-	"to_s":   NewBuiltinMethodValue(MethodByteArrayToString, []ValueType{StringValueType}, IntegerValueType),
+	"length":  NewBuiltinMethodValue(MethodByteArrayLength, []ValueType{}, IntegerValueType),
+	"size":    NewBuiltinMethodValue(MethodByteArrayLength, []ValueType{}, IntegerValueType),
+	"to_s":    NewBuiltinMethodValue(MethodByteArrayToString, []ValueType{StringValueType}, StringValueType),
+	"first":   NewBuiltinMethodValue(MethodArrayFirst, []ValueType{}, IntegerValueType),
+	"last":    NewBuiltinMethodValue(MethodArrayLast, []ValueType{}, IntegerValueType),
+	"min":     NewBuiltinMethodValue(MethodArrayMin, []ValueType{}, IntegerValueType),
+	"max":     NewBuiltinMethodValue(MethodArrayMax, []ValueType{}, IntegerValueType),
+	"reverse": NewBuiltinMethodValue(MethodStringReverse, []ValueType{}, ByteArrayValueType),
 }
 
 // StringSymbolTable is the static symbol table of string values.
@@ -153,25 +159,6 @@ func ArraySymbolTable(typ types.Type) map[string]*ExprValue {
 	}
 }
 
-// RootSymbol is a symbol used for symbol roots.
-type RootSymbol struct {
-}
-
-// StreamSymbol is a symbol sub-type for the stream intrinsic type. It can be
-// referred to using the _io intrinsic inside of expressions.
-type StreamSymbol struct {
-}
-
-// ExprParentSymbol is a symbol used to point to a parent of a specific type.
-type ExprParentSymbol struct {
-	Struct *kaitai.Struct
-}
-
-// ExprRootSymbol is a symbol used to point to a root of a specific type.
-type ExprRootSymbol struct {
-	Struct *kaitai.Struct
-}
-
 // MethodTypeData is a symbol used for methods, i.e. functions you can call in
 // expressions.
 type MethodTypeData struct {
@@ -180,17 +167,20 @@ type MethodTypeData struct {
 	ReturnType ValueType
 }
 
+// StructTypeData holds type-level information about a struct symbol.
 type StructTypeData struct {
 	Type      *kaitai.Struct
-	Enums     []*ExprType
-	Structs   []*ExprType
-	Params    []*ExprType
-	Attrs     []*ExprType
-	Instances []*ExprType
+	Opaque    bool // true for externally-defined opaque types
+	Enums     []*ExprValue
+	Structs   []*ExprValue
+	Params    []*ExprValue
+	Attrs     []*ExprValue
+	Instances []*ExprValue
 }
 
+// ArrayTypeData holds type-level information about an array symbol.
 type ArrayTypeData struct {
-	Elem *ExprType
+	Elem *ExprValue
 }
 
 // MethodFn is the runtime signature for methods.
@@ -208,9 +198,6 @@ type FloatData struct{ Value *big.Float }
 // BooleanData is a symbol sub-type for boolean literals.
 type BooleanData struct{ Value bool }
 
-// ArrayData is a symbol sub-type for array literals.
-type ArrayData struct{ Value []*ExprValue }
-
 // ByteArrayData is a symbol sub-type for byte array literals.
 type ByteArrayData struct{ Value []byte }
 
@@ -224,21 +211,22 @@ type CastData struct {
 	ValueType ValueType
 }
 
-// AliasData is a symbol sub type that refers to an alias for another symbol.
+// AliasData is a symbol sub-type that refers to an alias for another symbol.
 type AliasData struct {
-	Type   *ExprType
-	Value  *ExprValue
+	Ref    *ExprValue
 	Target string
 }
 
-type StructData struct {
-	Params    []*ExprValue
-	Attrs     []*ExprValue
-	Instances []*ExprValue
-}
-
+// StreamData is a symbol sub-type for stream values.
 type StreamData struct {
 	Stream *kaitai_io.Stream
+	// AbsoluteOffset is the byte offset of this stream's position 0 in
+	// the root buffer. 0 for the root stream; non-zero whenever the
+	// stream is a sub-stream (e.g., created by a size-bound user type).
+	// Used by the eval runtime to translate stream-local spans back to
+	// root-buffer coordinates so the hex editor can highlight the right
+	// bytes when instances reference a different stream via `io:`.
+	AbsoluteOffset uint64
 }
 
 type ExprKind int
@@ -266,13 +254,17 @@ const (
 	AliasKind
 )
 
-// ExprType represents a single expression type.
-type ExprType struct {
-	Kind     ExprKind
-	Parent   *ExprType
-	Children map[string]*ExprType
-	Constant *ExprValue
+// ExprValue is the unified symbol type for the expression engine, combining
+// type information and optional value data.
+type ExprValue struct {
+	Kind      ExprKind
+	Parent    *ExprValue
+	DefParent *ExprValue
+	Children  map[string]*ExprValue
+	Types     map[string]*ExprValue
+	Constant  *ExprValue
 
+	// Type metadata
 	Method    *MethodTypeData
 	Struct    *StructTypeData
 	Array     *ArrayTypeData
@@ -284,51 +276,57 @@ type ExprType struct {
 	Elem      *types.TypeRef
 	Cast      *CastData
 	Alias     *AliasData
-}
 
-// ExprValue represents a single expression value.
-type ExprValue struct {
-	Parent   *ExprValue
-	Children map[string]*ExprValue
-	Type     *ExprType
-
+	// Value data
 	Integer   *IntegerData
 	Float     *FloatData
 	Boolean   *BooleanData
-	Array     *ArrayData
+	Items     []*ExprValue // array element values
 	ByteArray *ByteArrayData
 	String    *StringData
-	Struct    *StructData
 	Stream    *StreamData
-}
 
-// NewTypeRoot creates a new type root.
-func NewTypeRoot() *ExprType {
-	return &ExprType{
-		Kind:     RootKind,
-		Children: make(map[string]*ExprType),
-	}
-}
-
-func (t *ExprType) addMember(name string, typ *ExprType) {
-	t.Children[name] = typ
+	// Runtime is an optional lazy lookup hook. When non-nil and a
+	// Children/Items lookup misses, the expression evaluator consults Runtime
+	// to resolve members/items on demand. Codegen path leaves this nil.
+	Runtime RuntimeRef
 }
 
 // NewValueRoot creates a new value root.
 func NewValueRoot() *ExprValue {
 	return &ExprValue{
+		Kind:     RootKind,
 		Children: make(map[string]*ExprValue),
-		Type:     NewTypeRoot(),
+		Types:    make(map[string]*ExprValue),
 	}
 }
 
-// NewValueOf creates a new value of a given type.
-func NewValueOf(context *Context, typ *ExprType) *ExprValue {
-	switch typ.Kind {
+func (v *ExprValue) addMember(name string, value *ExprValue) {
+	if v.Children == nil {
+		v.Children = make(map[string]*ExprValue)
+	}
+	v.Children[name] = value
+}
+
+func (v *ExprValue) addType(name string, typ *ExprValue) {
+	if v.Types == nil {
+		v.Types = make(map[string]*ExprValue)
+	}
+	v.Types[name] = typ
+}
+
+// NewValueOf creates a resolved value for a given symbol. This resolves what
+// kind of value a symbol produces (e.g. an attr of type u4 produces an integer
+// with integer methods).
+func NewValueOf(context *Context, sym *ExprValue) *ExprValue {
+	if sym == nil {
+		return nil
+	}
+	switch sym.Kind {
 	case StructParentKind:
-		return NewStructValueSymbol(typ, nil)
+		return NewStructValueSymbol(sym, nil)
 	case StructRootKind:
-		return NewStructValueSymbol(typ, nil)
+		return NewStructValueSymbol(sym, nil)
 	case IntegerKind:
 		return NewIntegerLiteralValue(big.NewInt(0))
 	case FloatKind:
@@ -336,29 +334,101 @@ func NewValueOf(context *Context, typ *ExprType) *ExprValue {
 	case BooleanKind:
 		return NewBooleanLiteralValue(false)
 	case ArrayKind:
-		return NewArrayLiteralValue(typ, []*ExprValue{})
+		return NewArrayLiteralValue(sym, []*ExprValue{})
 	case ByteArrayKind:
 		return NewByteArrayLiteralValue([]byte{})
 	case StringKind:
 		return NewStringLiteralValue("")
 	case StructKind:
-		return NewStructValueSymbol(typ, nil)
+		return NewStructValueSymbol(sym, nil)
 	case EnumValueKind:
-		return NewIntegerLiteralValue(typ.EnumValue.Value)
+		if sym.EnumValue != nil {
+			return NewIntegerLiteralValue(sym.EnumValue.Value)
+		}
+		return NewIntegerLiteralValue(big.NewInt(0))
 	case ParamKind:
-		return NewValueOfType(context, typ.Param.Type)
+		return NewValueOfType(context, sym.Param.Type)
 	case AttrKind:
-		if typ.Attr.Type.TypeRef == nil {
+		// If the attr has an enum, return an enum-typed value
+		if sym.Attr.Enum != "" {
+			return &ExprValue{
+				Kind:     EnumValueKind,
+				Children: EnumValueSymbolTable,
+			}
+		}
+		// If the attr is repeated, return an array value with array methods
+		if sym.Attr.Repeat != nil {
+			return &ExprValue{
+				Kind:     ArrayKind,
+				Children: ArraySymbolTable(sym.Attr.Type),
+			}
+		}
+		if sym.Attr.Type.TypeRef == nil {
+			if sym.Attr.Type.TypeSwitch != nil {
+				// Switch type - return a generic value that can be cast via .as<>
+				return &ExprValue{Kind: StructKind}
+			}
 			return nil
 		}
-		return NewValueOfType(context, *typ.Attr.Type.TypeRef)
+		return NewValueOfType(context, *sym.Attr.Type.TypeRef)
 	case InstanceKind:
-		if typ.Instance.Type.TypeRef == nil {
+		// For repeated instances, return an array value with array methods
+		if sym.Instance.Repeat != nil {
+			return &ExprValue{
+				Kind:     ArrayKind,
+				Children: ArraySymbolTable(sym.Instance.Type),
+			}
+		}
+		// For enum-typed instances, return an enum value with to_i method
+		if sym.Instance.Enum != "" {
+			return &ExprValue{
+				Kind:     EnumValueKind,
+				Children: EnumValueSymbolTable,
+			}
+		}
+		// For value-only instances (no explicit type or default bytes), infer from expression
+		if sym.Instance.Value != nil {
+			isDefaultBytes := sym.Instance.Type.TypeRef != nil && sym.Instance.Type.TypeRef.Kind == types.Bytes
+			if sym.Instance.Type.TypeRef == nil || isDefaultBytes {
+				result := ResultTypeOfExpr(context, sym.Instance.Value)
+				if result != nil {
+					inferred := NewValueOf(context, result)
+					if inferred != nil {
+						return inferred
+					}
+				}
+			}
+		}
+		if sym.Instance.Type.TypeRef == nil {
 			return nil
 		}
-		return NewValueOfType(context, *typ.Instance.Type.TypeRef)
+		return NewValueOfType(context, *sym.Instance.Type.TypeRef)
 	case AliasKind:
-		return NewValueOf(context, typ.Alias.Type)
+		// For aliases (like _ in repeat-until), resolve to the element type, not the array
+		aliasRef := sym.Alias.Ref
+		if aliasRef.Kind == AttrKind && aliasRef.Attr.Repeat != nil {
+			// Return element type, not array
+			if aliasRef.Attr.Type.TypeRef != nil {
+				return NewValueOfType(context, *aliasRef.Attr.Type.TypeRef)
+			}
+		}
+		return NewValueOf(context, aliasRef)
+	case StreamKind:
+		return NewStreamValue()
+	case CastedValueKind:
+		if sym.Cast != nil && sym.Cast.ValueType.Type.TypeRef != nil {
+			return NewValueOfType(context, *sym.Cast.ValueType.Type.TypeRef)
+		}
+		return nil
+	case MethodKind:
+		// Methods resolve to their return type for chained access (e.g., .to_i.to_s)
+		if sym.Method != nil {
+			ret := sym.Method.ReturnType
+			if ret.Type.TypeRef != nil {
+				return NewValueOfType(context, *ret.Type.TypeRef)
+			}
+		}
+		return nil
 	default:
 		return nil
 	}
@@ -387,7 +457,17 @@ func NewValueOfType(context *Context, typ types.TypeRef) *ExprValue {
 	case types.String:
 		return NewStringLiteralValue("")
 	case types.User:
+		// Handle builtin type names
+		switch typ.User.Name {
+		case "io":
+			return NewStreamValue()
+		case "bool":
+			return NewBooleanLiteralValue(false)
+		}
 		resolved, _ := context.ResolveType(typ.User.Name)
+		if resolved == nil {
+			return nil
+		}
 		return NewValueOf(context, resolved)
 	case types.UntypedBool:
 		return NewBooleanLiteralValue(false)
@@ -396,29 +476,21 @@ func NewValueOfType(context *Context, typ types.TypeRef) *ExprValue {
 	}
 }
 
-func (v *ExprValue) addMember(name string, value *ExprValue) {
-	v.Children[name] = value
-}
-
 // NewStreamValue creates the stream intrinsic.
 func NewStreamValue() *ExprValue {
 	return &ExprValue{
-		Type: &ExprType{
-			Kind: StreamKind,
-		},
+		Kind:     StreamKind,
 		Children: StreamSymbolTable,
 	}
 }
 
-// NewRuntimeStreamValue creates a runtime stream intrinsic.
-func NewRuntimeStreamValue(stream *kaitai_io.Stream) *ExprValue {
+// NewRuntimeStreamValue creates a runtime stream intrinsic. `absoluteOffset`
+// is the byte offset of `stream` position 0 in the root buffer (0 for the
+// root stream itself; non-zero for sub-streams).
+func NewRuntimeStreamValue(stream *kaitai_io.Stream, absoluteOffset uint64) *ExprValue {
 	return &ExprValue{
-		Type: &ExprType{
-			Kind: StreamKind,
-		},
-		Stream: &StreamData{
-			Stream: stream,
-		},
+		Kind:     StreamKind,
+		Stream:   &StreamData{Stream: stream, AbsoluteOffset: absoluteOffset},
 		Children: StreamSymbolTable,
 	}
 }
@@ -426,116 +498,91 @@ func NewRuntimeStreamValue(stream *kaitai_io.Stream) *ExprValue {
 // NewBuiltinMethodValue creates an expression method symbol.
 func NewBuiltinMethodValue(method BuiltinMethod, args []ValueType, ret ValueType) *ExprValue {
 	return &ExprValue{
-		Type: &ExprType{
-			Kind: MethodKind,
-			Method: &MethodTypeData{
-				Method:     method,
-				Arguments:  args,
-				ReturnType: ret,
-			},
+		Kind: MethodKind,
+		Method: &MethodTypeData{
+			Method:     method,
+			Arguments:  args,
+			ReturnType: ret,
 		},
 	}
 }
 
 // NewStructParentValue creates a new value referring to a struct's parent.
 func NewStructParentValue(parent *ExprValue) *ExprValue {
-	if parent.Type.Kind != StructKind {
+	if parent.Kind != StructKind {
 		return nil
 	}
 	return &ExprValue{
-		Type: &ExprType{
-			Kind:   StructParentKind,
-			Struct: parent.Type.Struct,
-		},
+		Kind:   StructParentKind,
+		Struct: parent.Struct,
 	}
 }
 
 // NewStructRootValue creates a new value referring to a struct's root.
 func NewStructRootValue(root *ExprValue) *ExprValue {
-	if root.Type.Kind != StructKind {
+	if root.Kind != StructKind {
 		return nil
 	}
 	return &ExprValue{
-		Type: &ExprType{
-			Kind:   StructRootKind,
-			Struct: root.Type.Struct,
-		},
+		Kind:   StructRootKind,
+		Struct: root.Struct,
 	}
-}
-
-var IntegerExprType = &ExprType{
-	Kind: IntegerKind,
 }
 
 // NewIntegerLiteralValue creates a new value referring to an integer literal.
 func NewIntegerLiteralValue(value *big.Int) *ExprValue {
 	return &ExprValue{
-		Type:     IntegerExprType,
+		Kind:     IntegerKind,
 		Children: IntegerSymbolTable,
 		Integer:  &IntegerData{Value: value},
 	}
 }
 
-var FloatExprType = &ExprType{
-	Kind: FloatKind,
-}
-
 // NewFloatLiteralValue creates a new symbol referring to a float literal.
 func NewFloatLiteralValue(value *big.Float) *ExprValue {
 	return &ExprValue{
-		Type:     FloatExprType,
+		Kind:     FloatKind,
 		Children: FloatSymbolTable,
 		Float:    &FloatData{Value: value},
 	}
 }
 
-var BooleanExprType = &ExprType{
-	Kind: BooleanKind,
-}
-
 // NewBooleanLiteralValue creates a new value for a boolean literal.
 func NewBooleanLiteralValue(value bool) *ExprValue {
 	return &ExprValue{
-		Type:     BooleanExprType,
+		Kind:     BooleanKind,
 		Children: BooleanSymbolTable,
 		Boolean:  &BooleanData{Value: value},
 	}
 }
 
 // NewArrayLiteralValue creates a new value for an array literal.
-func NewArrayLiteralValue(typ *ExprType, value []*ExprValue) *ExprValue {
+func NewArrayLiteralValue(typ *ExprValue, value []*ExprValue) *ExprValue {
 	elemValueType, ok := typ.Array.Elem.ValueType()
 	if !ok {
 		return nil
 	}
 	return &ExprValue{
-		Type:     typ,
+		Kind:     ArrayKind,
+		Array:    typ.Array,
 		Children: ArraySymbolTable(elemValueType.Type),
-		Array:    &ArrayData{Value: value},
+		Items:    value,
 	}
-}
-
-var ByteArrayExprType = &ExprType{
-	Kind: ByteArrayKind,
 }
 
 // NewByteArrayLiteralValue creates a new value for a byte buffer.
 func NewByteArrayLiteralValue(value []byte) *ExprValue {
 	return &ExprValue{
-		Type:      ByteArrayExprType,
+		Kind:      ByteArrayKind,
 		Children:  ByteArraySymbolTable,
 		ByteArray: &ByteArrayData{Value: value},
 	}
 }
 
-var StringExprType = &ExprType{
-	Kind: StringKind,
-}
-
 // NewStringLiteralValue creates a new value for a string literal.
 func NewStringLiteralValue(value string) *ExprValue {
 	return &ExprValue{
-		Type:     StringExprType,
+		Kind:     StringKind,
 		Children: StringSymbolTable,
 		String:   &StringData{Value: value},
 	}
@@ -558,8 +605,9 @@ func setMethodsForKind(value *ExprValue, typ *types.TypeRef) {
 	}
 }
 
-func NewArrayType(elem *ExprType, parent *ExprType) *ExprType {
-	return &ExprType{
+// NewArrayType creates a new array type symbol.
+func NewArrayType(elem *ExprValue, parent *ExprValue) *ExprValue {
+	return &ExprValue{
 		Parent: parent,
 		Kind:   ArrayKind,
 		Array: &ArrayTypeData{
@@ -568,95 +616,63 @@ func NewArrayType(elem *ExprType, parent *ExprType) *ExprType {
 	}
 }
 
-func NewParamType(param *kaitai.Param, parent *ExprType) *ExprType {
-	return &ExprType{
-		Parent: parent,
-		Kind:   ParamKind,
-		Param:  param,
-	}
-}
-
-// NewAttrType creates a new type referring to a struct attribute.
-func NewAttrType(attr *kaitai.Attr, parent *ExprType) *ExprType {
-	return &ExprType{
-		Parent: parent,
-		Kind:   AttrKind,
-		Attr:   attr,
-	}
-}
-
-// NewInstanceType creates a new type referring to a struct instance.
-func NewInstanceType(instance *kaitai.Attr, parent *ExprType) *ExprType {
-	return &ExprType{
-		Parent:   parent,
-		Kind:     InstanceKind,
-		Instance: instance,
-	}
-}
-
-func NewEnumValueType(enumValue *kaitai.EnumValue) *ExprType {
-	typ := &ExprType{
+func NewEnumValueSymbol(enumValue *kaitai.EnumValue) *ExprValue {
+	sym := &ExprValue{
 		Kind:      EnumValueKind,
 		EnumValue: enumValue,
 	}
-	typ.Constant = &ExprValue{
-		Type: &ExprType{
-			Kind:   IntegerKind,
-			Parent: typ,
-		},
-		Children: IntegerSymbolTable,
+	// Enum value constants need both integer methods (to_s) and enum methods (to_i)
+	enumConstSymbols := map[string]*ExprValue{}
+	for k, v := range IntegerSymbolTable {
+		enumConstSymbols[k] = v
+	}
+	for k, v := range EnumValueSymbolTable {
+		enumConstSymbols[k] = v
+	}
+	sym.Constant = &ExprValue{
+		Kind:     IntegerKind,
+		Parent:   sym,
+		Children: enumConstSymbols,
 		Integer:  &IntegerData{Value: enumValue.Value},
 	}
-	return typ
+	return sym
 }
 
-func NewEnumType(enum *kaitai.Enum) *ExprType {
-	typ := &ExprType{
-		Children: make(map[string]*ExprType),
-		Kind:     EnumKind,
-		Enum:     enum,
+func NewEnumSymbol(enum *kaitai.Enum) *ExprValue {
+	sym := &ExprValue{
+		Types: make(map[string]*ExprValue),
+		Kind:  EnumKind,
+		Enum:  enum,
 	}
 	for _, value := range enum.Values {
 		value := value
-		vt := NewEnumValueType(&value)
-		vt.Parent = typ
-		typ.addMember(string(value.ID), vt)
+		vt := NewEnumValueSymbol(&value)
+		vt.Parent = sym
+		sym.addType(string(value.ID), vt)
 	}
-	return typ
-}
-
-// NewAttrValue creates a new value referring to a struct parameter.
-func NewParamValue(typ *ExprType, parent *ExprValue) *ExprValue {
-	return &ExprValue{Parent: parent, Type: typ}
-}
-
-// NewAttrValue creates a new value referring to a struct attribute.
-func NewAttrValue(typ *ExprType, parent *ExprValue) *ExprValue {
-	return &ExprValue{Parent: parent, Type: typ}
-}
-
-// NewInstanceValue creates a new value referring to a struct instance.
-func NewInstanceValue(typ *ExprType, parent *ExprValue) *ExprValue {
-	return &ExprValue{Parent: parent, Type: typ}
+	return sym
 }
 
 // NewCastedValue creates a new symbol that is typecast from another symbol.
+//
+// The cast is intentionally permissive: any source with a valid ValueType is
+// accepted, and no compatibility check is performed against `cast`. Callers
+// rely on this leniency for cases the static type system cannot resolve -
+// e.g. `.as<T>` on a switch-typed field where any case might be the actual
+// runtime type. A stricter version would reject impossible casts at codegen
+// time and, for type-switch sources, narrow to the subset of cases that fit;
+// today both responsibilities sit with the caller.
 func NewCastedValue(sym *ExprValue, cast ValueType) *ExprValue {
-	_, ok := sym.Type.ValueType()
+	_, ok := sym.ValueType()
 	if !ok {
 		return nil
 	}
-	// TODO:
-	// - Should return nil if the cast is impossible
-	// - Probably should find the set of typeswitch cases that fit
 	value := &ExprValue{
 		Parent: sym.Parent,
-		Type: &ExprType{
-			Kind: CastedValueKind,
-			Cast: &CastData{
-				Symbol:    sym,
-				ValueType: cast,
-			},
+		Kind:   CastedValueKind,
+		Cast: &CastData{
+			Symbol:    sym,
+			ValueType: cast,
 		},
 	}
 	if cast.Type.TypeRef != nil {
@@ -666,92 +682,106 @@ func NewCastedValue(sym *ExprValue, cast ValueType) *ExprValue {
 }
 
 // NewAliasSymbol creates a new symbol that is an alias of another symbol.
-func NewAliasSymbol(typ *ExprType, val *ExprValue, target string) *ExprValue {
-	value := &ExprValue{
-		Parent: nil,
-		Type: &ExprType{
-			Kind: AliasKind,
-			Alias: &AliasData{
-				Type:   typ,
-				Value:  val,
-				Target: target,
-			},
+func NewAliasSymbol(ref *ExprValue, target string) *ExprValue {
+	return &ExprValue{
+		Kind: AliasKind,
+		Alias: &AliasData{
+			Ref:    ref,
+			Target: target,
 		},
 	}
-	return value
 }
 
-// NewStructTypeSymbol creates a new symbol referring to a user-defined struct
-// type. parent should be nil in top-level structs.
-func NewStructTypeSymbol(struc *kaitai.Struct, parent *ExprType) *ExprType {
+// NewStructSymbol creates a new symbol referring to a user-defined struct type.
+// This creates a unified symbol with both type information (nested types in Types)
+// and value information (fields in Children). parent should be nil for top-level structs.
+func NewStructSymbol(struc *kaitai.Struct, parent *ExprValue) *ExprValue {
 	structData := &StructTypeData{
 		Type: struc,
 	}
-	result := &ExprType{
-		Kind:     StructKind,
-		Parent:   parent,
-		Children: make(map[string]*ExprType),
-		Struct:   structData,
+	result := &ExprValue{
+		Kind:      StructKind,
+		Parent:    parent,
+		DefParent: parent,
+		Children:  make(map[string]*ExprValue),
+		Types:     make(map[string]*ExprValue),
+		Struct:    structData,
 	}
 	for _, enum := range struc.Enums {
-		enumType := NewEnumType(enum)
-		enumType.Parent = result
-		structData.Enums = append(structData.Enums, enumType)
-		result.addMember(string(enum.ID), enumType)
+		enumSym := NewEnumSymbol(enum)
+		enumSym.Parent = result
+		enumSym.DefParent = result
+		structData.Enums = append(structData.Enums, enumSym)
+		result.addType(string(enum.ID), enumSym)
 	}
-	for _, struc := range struc.Structs {
-		structType := NewStructTypeSymbol(struc, result)
-		structData.Structs = append(structData.Structs, structType)
-		result.addMember(string(struc.ID), structType)
+	for _, child := range struc.Structs {
+		childSym := NewStructSymbol(child, result)
+		structData.Structs = append(structData.Structs, childSym)
+		result.addType(string(child.ID), childSym)
 	}
 	for _, param := range struc.Params {
-		paramTyp := NewParamType(param, result)
-		structData.Params = append(structData.Params, paramTyp)
+		paramSym := &ExprValue{Parent: result, Kind: ParamKind, Param: param}
+		structData.Params = append(structData.Params, paramSym)
+		result.addMember(string(param.ID), paramSym)
 	}
 	for _, attr := range struc.Seq {
-		attrTyp := NewAttrType(attr, result)
-		structData.Attrs = append(structData.Attrs, attrTyp)
+		attrSym := &ExprValue{Parent: result, Kind: AttrKind, Attr: attr}
+		structData.Attrs = append(structData.Attrs, attrSym)
+		result.addMember(string(attr.ID), attrSym)
 	}
 	for _, instance := range struc.Instances {
-		instanceTyp := NewInstanceType(instance, result)
-		structData.Instances = append(structData.Instances, instanceTyp)
+		instSym := &ExprValue{Parent: result, Kind: InstanceKind, Instance: instance}
+		structData.Instances = append(structData.Instances, instSym)
+		result.addMember(string(instance.ID), instSym)
 	}
 	// Types can reference themselves, of course.
-	result.addMember(string(struc.ID), result)
+	result.addType(string(struc.ID), result)
 	return result
 }
 
-// NewStructTypeSymbol creates a new symbol referring to a user-defined struct
-// type. parent should be nil in top-level structs.
-func NewStructValueSymbol(structType *ExprType, parent *ExprValue) *ExprValue {
-	structData := &StructData{}
+// NewStructValueSymbol creates a new value-level symbol for a struct, useful
+// when you need a copy with a different parent (e.g. for emitter traversal).
+func NewStructValueSymbol(structSym *ExprValue, parent *ExprValue) *ExprValue {
 	result := &ExprValue{
-		Type:     structType,
-		Children: make(map[string]*ExprValue),
-		Parent:   parent,
-		Struct:   structData,
+		Kind:      structSym.Kind,
+		DefParent: structSym.DefParent,
+		Struct:    structSym.Struct,
+		Children:  make(map[string]*ExprValue),
+		Types:     structSym.Types,
+		Parent:    parent,
 	}
-	for _, param := range structType.Struct.Params {
-		paramValue := NewParamValue(param, result)
-		structData.Params = append(structData.Params, paramValue)
-		result.addMember(string(param.Param.ID), paramValue)
+	for _, param := range structSym.Struct.Params {
+		paramVal := &ExprValue{Parent: result, Kind: ParamKind, Param: param.Param}
+		result.addMember(string(param.Param.ID), paramVal)
 	}
-	for _, attr := range structType.Struct.Attrs {
-		attrVal := NewAttrValue(attr, result)
-		structData.Attrs = append(structData.Attrs, attrVal)
+	for _, attr := range structSym.Struct.Attrs {
+		attrVal := &ExprValue{Parent: result, Kind: AttrKind, Attr: attr.Attr}
 		result.addMember(string(attr.Attr.ID), attrVal)
 	}
-	for _, instance := range structType.Struct.Instances {
-		instanceVal := NewInstanceValue(instance, result)
-		structData.Instances = append(structData.Instances, instanceVal)
-		result.addMember(string(instance.Instance.ID), instanceVal)
+	for _, instance := range structSym.Struct.Instances {
+		instVal := &ExprValue{Parent: result, Kind: InstanceKind, Instance: instance.Instance}
+		result.addMember(string(instance.Instance.ID), instVal)
 	}
 	return result
+}
+
+// NewOpaqueStructSymbol creates a minimal struct symbol for an opaque external type.
+// Opaque types have no known params, attrs, instances, or children.
+func NewOpaqueStructSymbol(name string) *ExprValue {
+	return &ExprValue{
+		Kind: StructKind,
+		Struct: &StructTypeData{
+			Type:   &kaitai.Struct{ID: kaitai.Identifier(name)},
+			Opaque: true,
+		},
+		Children: make(map[string]*ExprValue),
+		Types:    make(map[string]*ExprValue),
+	}
 }
 
 // ValueType returns the value this symbol evaluates to, if it can be referred
 // to as a value. Otherwise, it returns an empty value type and false.
-func (s *ExprType) ValueType() (ValueType, bool) {
+func (s *ExprValue) ValueType() (ValueType, bool) {
 	if s == nil {
 		return ValueType{}, false
 	}
@@ -791,17 +821,23 @@ func (s *ExprType) ValueType() (ValueType, bool) {
 	case CastedValueKind:
 		return s.Cast.ValueType, true
 	case AliasKind:
-		return s.Alias.Type.ValueType()
+		return s.Alias.Ref.ValueType()
 	}
 	return ValueType{}, false
 }
 
-func (s *ExprType) Child(symbol string) *ExprType {
+func (s *ExprValue) Child(symbol string) *ExprValue {
+	if s.Children == nil {
+		return nil
+	}
 	return s.Children[symbol]
 }
 
-func (s *ExprValue) Child(symbol string) *ExprValue {
-	return s.Children[symbol]
+func (s *ExprValue) TypeChild(symbol string) *ExprValue {
+	if s.Types == nil {
+		return nil
+	}
+	return s.Types[symbol]
 }
 
 // ResolutionScope represents a specific scope of resolution. Values are in
@@ -835,6 +871,7 @@ type Context struct {
 
 	stream *ExprValue
 	tmp    *ExprValue
+	index  *ExprValue // current `_index` value when evaluating inside an array element
 }
 
 // NewContext creates a new symbol context.
@@ -847,16 +884,16 @@ func NewContext() *Context {
 	}
 }
 
-func (context *Context) AddGlobalType(name string, typ *ExprType) {
-	context.global.Type.addMember(name, typ)
+func (context *Context) AddGlobalType(name string, typ *ExprValue) {
+	context.global.addType(name, typ)
 }
 
 func (context *Context) AddGlobalSymbol(name string, value *ExprValue) {
 	context.global.addMember(name, value)
 }
 
-func (context *Context) AddModuleType(name string, typ *ExprType) {
-	context.module.Type.addMember(name, typ)
+func (context *Context) AddModuleType(name string, typ *ExprValue) {
+	context.module.addType(name, typ)
 }
 
 func (context *Context) AddModuleSymbol(name string, value *ExprValue) {
@@ -874,6 +911,7 @@ func (context *Context) WithModuleRoot(symbol *ExprValue) *Context {
 		local:  context.local,
 		stream: context.stream,
 		tmp:    context.tmp,
+		index:  context.index,
 	}
 }
 
@@ -884,6 +922,7 @@ func (context *Context) WithLocalRoot(symbol *ExprValue) *Context {
 		local:  symbol,
 		stream: context.stream,
 		tmp:    context.tmp,
+		index:  context.index,
 	}
 }
 
@@ -904,6 +943,21 @@ func (context *Context) WithStream(stream *ExprValue) *Context {
 		local:  context.local,
 		stream: stream,
 		tmp:    context.tmp,
+		index:  context.index,
+	}
+}
+
+// WithIndex returns a copy of context with `_index` bound to the given value.
+// Used by repeat-* loops so size and other expressions can reference the
+// current iteration index.
+func (context *Context) WithIndex(index *ExprValue) *Context {
+	return &Context{
+		global: context.global,
+		module: context.module,
+		local:  context.local,
+		stream: context.stream,
+		tmp:    context.tmp,
+		index:  index,
 	}
 }
 
@@ -913,6 +967,9 @@ func (context *Context) ResolveIntrinsic(name string) *ExprValue {
 		return context.module
 
 	case "_parent":
+		if context.local != nil && context.local.Parent != nil {
+			return context.local.Parent
+		}
 		return context.local
 
 	case "_io":
@@ -920,6 +977,31 @@ func (context *Context) ResolveIntrinsic(name string) *ExprValue {
 
 	case "_":
 		return context.tmp
+
+	case "_index":
+		// _index is the current iteration index in a repeat-* loop. Defaults
+		// to 0 when no loop is active so type-resolution paths that don't
+		// have a concrete index (e.g. codegen) still get a sensible value.
+		if context.index != nil {
+			return context.index
+		}
+		return NewIntegerLiteralValue(big.NewInt(0))
+
+	case "_sizeof":
+		// _sizeof returns the size of the current struct. First check for a
+		// pre-populated value, then fall back to the Runtime hook (which can
+		// compute the span lazily for runtime-backed struct values).
+		if context.local != nil {
+			if sizeVal := context.local.Child("_sizeof"); sizeVal != nil {
+				return sizeVal
+			}
+			if context.local.Runtime != nil {
+				if sizeVal, ok := context.local.Runtime.LookupChild("_sizeof"); ok && sizeVal != nil {
+					return sizeVal
+				}
+			}
+		}
+		return NewIntegerLiteralValue(big.NewInt(0))
 	}
 	return nil
 }
@@ -929,6 +1011,9 @@ func (context *Context) RootValue() *ExprValue {
 }
 
 func (context *Context) ParentValue() *ExprValue {
+	if context.local != nil && context.local.Parent != nil {
+		return context.local.Parent
+	}
 	return context.local
 }
 
@@ -936,23 +1021,23 @@ func (context *Context) StreamValue() *ExprValue {
 	return context.stream
 }
 
-func (context *Context) ResolveLocalType(name string) *ExprType {
-	typ := context.local.Type.Child(name)
+func (context *Context) ResolveLocalType(name string) *ExprValue {
+	typ := context.local.TypeChild(name)
 	if typ != nil {
 		return typ
 	}
-	if context.local.Type.Parent != nil {
-		return context.local.Type.Parent.Child(name)
+	if context.local.Parent != nil {
+		return context.local.Parent.TypeChild(name)
 	}
 	return nil
 }
 
-func (context *Context) ResolveModuleType(name string) *ExprType {
-	return context.module.Type.Child(name)
+func (context *Context) ResolveModuleType(name string) *ExprValue {
+	return context.module.TypeChild(name)
 }
 
-func (context *Context) ResolveGlobalType(name string) *ExprType {
-	return context.global.Type.Child(name)
+func (context *Context) ResolveGlobalType(name string) *ExprValue {
+	return context.global.TypeChild(name)
 }
 
 func (context *Context) ResolveLocal(name string) *ExprValue {
@@ -986,9 +1071,9 @@ func (context *Context) Resolve(name string) (*ExprValue, ResolutionScope) {
 	return nil, GlobalScope
 }
 
-func (context *Context) ResolveType(name string) (*ExprType, ResolutionScope) {
+func (context *Context) ResolveType(name string) (*ExprValue, ResolutionScope) {
 	if sym := context.ResolveIntrinsic(name); sym != nil {
-		return sym.Type, IntrinsicScope
+		return sym, IntrinsicScope
 	}
 	if sym := context.ResolveLocalType(name); sym != nil {
 		return sym, LocalScope
@@ -1014,5 +1099,5 @@ func (context *Context) Struct() *kaitai.Struct {
 	if context == nil {
 		return nil
 	}
-	return context.local.Type.Struct.Type
+	return context.local.Struct.Type
 }

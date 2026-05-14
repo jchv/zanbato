@@ -1,0 +1,7 @@
+id: zb_str_encodings
+data: zb_str_encodings.bin
+asserts:
+  - actual: utf8_str
+    expected: '"Hi"'
+  - actual: utf16_str
+    expected: '"Hi"'

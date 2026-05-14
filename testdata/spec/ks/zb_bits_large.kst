@@ -1,0 +1,7 @@
+id: zb_bits_large
+data: zb_bits_large.bin
+asserts:
+  - actual: big_val
+    expected: 0xDEADBEEF
+  - actual: next_val
+    expected: 0xCAFEBABE

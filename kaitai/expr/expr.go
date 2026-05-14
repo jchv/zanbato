@@ -18,6 +18,7 @@ const (
 	InvalidUnaryOp UnaryOp = iota
 
 	OpLogicalNot
+	OpNegate // Unary minus: -x
 )
 
 type BinaryOp int
@@ -70,6 +71,36 @@ func (StringNode) isnode() {}
 
 func (s StringNode) String() string { return fmt.Sprintf("%q", s.Str) }
 
+// FStringNode is a formatted string (f-string) with interpolated expressions.
+// Parts alternate between literal string segments and embedded expressions.
+type FStringNode struct {
+	Parts []FStringPart
+}
+
+// FStringPart is either a literal string segment or an expression in an f-string.
+type FStringPart struct {
+	Literal string // non-empty for literal segments
+	Expr    Node   // non-nil for expression segments
+}
+
+func (FStringNode) isnode() {}
+
+func (f FStringNode) String() string {
+	b := strings.Builder{}
+	b.WriteString("f\"")
+	for _, p := range f.Parts {
+		if p.Expr != nil {
+			b.WriteString("{")
+			b.WriteString(p.Expr.String())
+			b.WriteString("}")
+		} else {
+			b.WriteString(p.Literal)
+		}
+	}
+	b.WriteString("\"")
+	return b.String()
+}
+
 // IntNode is an integer literal.
 type IntNode struct{ Integer *big.Int }
 
@@ -115,6 +146,51 @@ func (a ArrayNode) String() string {
 	return b.String()
 }
 
+// CallNode is a method/function call (e.g., x.method(args))
+type CallNode struct {
+	Object Node   // The object being called on (MemberNode or IdentNode)
+	Args   []Node // Arguments
+}
+
+func (CallNode) isnode() {}
+
+func (c CallNode) String() string {
+	b := strings.Builder{}
+	b.WriteString(c.Object.String())
+	b.WriteByte('(')
+	for i, arg := range c.Args {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(arg.String())
+	}
+	b.WriteByte(')')
+	return b.String()
+}
+
+// CastNode is a type cast expression (e.g., x.as<type>)
+type CastNode struct {
+	Operand  Node   // The expression being cast
+	TypeName string // The target type name
+}
+
+func (CastNode) isnode() {}
+
+func (c CastNode) String() string {
+	return c.Operand.String() + ".as<" + c.TypeName + ">"
+}
+
+// SizeofNode is a sizeof expression (e.g., sizeof<type>)
+type SizeofNode struct {
+	TypeName string
+}
+
+func (SizeofNode) isnode() {}
+
+func (s SizeofNode) String() string {
+	return "sizeof<" + s.TypeName + ">"
+}
+
 // UnaryNode is a unary operation
 type UnaryNode struct {
 	Operand Node
@@ -127,8 +203,10 @@ func (u UnaryNode) String() string {
 	switch u.Op {
 	case OpLogicalNot:
 		return "not (" + u.Operand.String() + ")"
+	case OpNegate:
+		return "-(" + u.Operand.String() + ")"
 	default:
-		return "!" + u.Op.String() + " (" + u.Operand.String() + ")"
+		return u.Op.String() + " (" + u.Operand.String() + ")"
 	}
 }
 
@@ -236,10 +314,10 @@ func ParseExpr(src string) (result *Expr, err error) {
 		if r := recover(); r != nil {
 			if rErr, ok := r.(error); ok {
 				err = fmt.Errorf("error parsing expression at character %d: %w", p.pos+1, rErr)
-				result = nil
 			} else {
-				panic(r)
+				err = fmt.Errorf("error parsing expression at character %d: %v", p.pos+1, r)
 			}
+			result = nil
 		} else {
 			if len(p.s) > 0 {
 				err = fmt.Errorf("unparsed expression text: %q", string(p.s))
@@ -268,10 +346,12 @@ func ishex(ch rune) bool        { return '0' <= ch && ch <= '9' || 'a' <= lower(
 func isasciiletter(c rune) bool { return 'a' <= lower(c) && lower(c) <= 'z' }
 func isletter(c rune) bool      { return isasciiletter(c) || c >= utf8.RuneSelf && unicode.IsLetter(c) }
 func isdigit(c rune) bool       { return isdecimal(c) || c >= utf8.RuneSelf && unicode.IsDigit(c) }
-func isnumber(c rune) bool      { return isdigit(c) || ishex(c) || c == '.' || lower(c) == 'x' }
-func isidentstart(c rune) bool  { return isletter(c) || c == '_' }
-func isident(c rune) bool       { return isidentstart(c) || isdigit(c) }
-func iswhitespace(c rune) bool  { return c == ' ' || c == '\t' }
+func isnumber(c rune) bool {
+	return isdigit(c) || c == '_'
+}
+func isidentstart(c rune) bool { return isletter(c) || c == '_' }
+func isident(c rune) bool      { return isidentstart(c) || isdigit(c) }
+func iswhitespace(c rune) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
 
 type parser struct {
 	s   []rune
@@ -312,6 +392,23 @@ func (p *parser) skipwhitespace() {
 	}
 }
 
+func (p *parser) consumeKeyword(keyword string) bool {
+	runes := []rune(keyword)
+	if len(p.s) < len(runes) {
+		return false
+	}
+	for i, r := range runes {
+		if p.s[i] != r {
+			return false
+		}
+	}
+	if len(p.s) > len(runes) && isident(p.s[len(runes)]) {
+		return false
+	}
+	p.advance(len(runes))
+	return true
+}
+
 func (p *parser) token(test func(rune) bool) string {
 	var token string
 	for len(p.s) != 0 && test(p.s[0]) {
@@ -322,6 +419,9 @@ func (p *parser) token(test func(rune) bool) string {
 }
 
 func (p *parser) strescape(quote rune) []byte {
+	if len(p.s) == 0 {
+		panic(fmt.Errorf("unterminated escape sequence"))
+	}
 	c := p.s[0]
 	p.advance(1)
 	switch c {
@@ -339,19 +439,32 @@ func (p *parser) strescape(quote rune) []byte {
 		return []byte{'\t'}
 	case 'v':
 		return []byte{'\v'}
+	case 'e':
+		return []byte{0x1b} // escape character
 	case '\\':
 		return []byte{'\\'}
 	case rune(quote):
 		return []byte(string(quote))
+	case '"':
+		return []byte{'"'}
+	case '\'':
+		return []byte{'\''}
 	case '0', '1', '2', '3', '4', '5', '6', '7':
-		octal := string(c) + string(p.s[0]) + string(p.s[1])
-		p.advance(2)
+		// Octal escape: 1-3 digits
+		octal := string(c)
+		for i := 0; i < 2 && len(p.s) > 0 && p.s[0] >= '0' && p.s[0] <= '7'; i++ {
+			octal += string(p.s[0])
+			p.advance(1)
+		}
 		code, err := strconv.ParseUint(octal, 8, 8)
 		if err != nil {
 			panic(err)
 		}
 		return []byte{byte(code)}
 	case 'x':
+		if len(p.s) < 2 {
+			panic(fmt.Errorf("short \\x escape: expected 2 hex digits"))
+		}
 		hex := string(p.s[0]) + string(p.s[1])
 		p.advance(2)
 		code, err := strconv.ParseUint(hex, 16, 8)
@@ -360,6 +473,9 @@ func (p *parser) strescape(quote rune) []byte {
 		}
 		return []byte{byte(code)}
 	case 'u':
+		if len(p.s) < 4 {
+			panic(fmt.Errorf("short \\u escape: expected 4 hex digits"))
+		}
 		hex := string(p.s[0]) + string(p.s[1]) + string(p.s[2]) + string(p.s[3])
 		p.advance(4)
 		code, err := strconv.ParseUint(hex, 16, 16)
@@ -368,6 +484,9 @@ func (p *parser) strescape(quote rune) []byte {
 		}
 		return []byte(string(rune(code)))
 	case 'U':
+		if len(p.s) < 8 {
+			panic(fmt.Errorf("short \\U escape: expected 8 hex digits"))
+		}
 		hex := string(p.s[0]) + string(p.s[1]) + string(p.s[2]) + string(p.s[3]) + string(p.s[4]) + string(p.s[5]) + string(p.s[6]) + string(p.s[7])
 		p.advance(8)
 		code, err := strconv.ParseUint(hex, 16, 32)
@@ -383,20 +502,114 @@ func (p *parser) strescape(quote rune) []byte {
 // # Parsing
 func (p *parser) number() Node {
 	token := p.token(isnumber)
-	if strings.Contains(token, ".") {
+
+	// Handle base prefixes: 0x (hex), 0o (octal), 0b (binary)
+	if token == "0" {
+		switch lower(p.peek()) {
+		case 'x':
+			token += string(p.next())
+			token += p.token(func(c rune) bool { return ishex(c) || c == '_' })
+			i := IntNode{Integer: big.NewInt(0)}
+			_, ok := i.Integer.SetString(strings.ReplaceAll(token, "_", ""), 0)
+			if !ok {
+				panic(errors.New("invalid hex integer"))
+			}
+			return i
+		case 'o':
+			token += string(p.next())
+			token += p.token(func(c rune) bool { return c >= '0' && c <= '7' || c == '_' })
+			i := IntNode{Integer: big.NewInt(0)}
+			_, ok := i.Integer.SetString(strings.ReplaceAll(token, "_", ""), 0)
+			if !ok {
+				panic(errors.New("invalid octal integer"))
+			}
+			return i
+		case 'b':
+			token += string(p.next())
+			token += p.token(func(c rune) bool { return c == '0' || c == '1' || c == '_' })
+			i := IntNode{Integer: big.NewInt(0)}
+			_, ok := i.Integer.SetString(strings.ReplaceAll(token, "_", ""), 0)
+			if !ok {
+				panic(errors.New("invalid binary integer"))
+			}
+			return i
+		}
+	}
+
+	// Handle decimal point for floats - but only if followed by a digit
+	// (to avoid consuming `.as` in `0.5.as<f4>`)
+	isFloat := false
+	if p.peek() == '.' && isdigit(p.peek2()) {
+		token += string(p.next()) // consume '.'
+		token += p.token(isnumber)
+		isFloat = true
+	}
+
+	// Handle exponent notation (e.g., 1e10, 2.5e-121)
+	if lower(p.peek()) == 'e' {
+		token += string(p.next()) // consume 'e'/'E'
+		if p.peek() == '+' || p.peek() == '-' {
+			token += string(p.next()) // consume sign
+		}
+		token += p.token(isnumber)
+		isFloat = true
+	}
+
+	if isFloat {
 		f := FloatNode{Float: big.NewFloat(0)}
-		_, _, err := f.Float.Parse(token, 0)
+		_, _, err := f.Float.Parse(strings.ReplaceAll(token, "_", ""), 0)
 		if err != nil {
 			panic(err)
 		}
 		return f
 	}
+
 	i := IntNode{Integer: big.NewInt(0)}
-	_, ok := i.Integer.SetString(token, 0)
+	_, ok := i.Integer.SetString(strings.ReplaceAll(token, "_", ""), 0)
 	if !ok {
 		panic(errors.New("invalid integer"))
 	}
 	return i
+}
+
+func (p *parser) fstrlit() Node {
+	// Called after 'f' has been consumed; the next char is the opening quote.
+	quote := p.s[0]
+	p.advance(1)
+	var parts []FStringPart
+	lit := []byte{}
+
+	for {
+		if len(p.s) == 0 {
+			panic(fmt.Errorf("unterminated f-string literal"))
+		}
+		c := p.s[0]
+		p.advance(1)
+		switch c {
+		case rune(quote):
+			// End of f-string
+			if len(lit) > 0 {
+				parts = append(parts, FStringPart{Literal: string(lit)})
+			}
+			return FStringNode{Parts: parts}
+		case '\\':
+			lit = append(lit, p.strescape(quote)...)
+		case '{':
+			// Start of expression interpolation
+			if len(lit) > 0 {
+				parts = append(parts, FStringPart{Literal: string(lit)})
+				lit = nil
+			}
+			// Parse the expression until '}'
+			exprNode := p.expr(0)
+			if p.next() != '}' {
+				panic(fmt.Errorf("expected '}' in f-string"))
+			}
+			parts = append(parts, FStringPart{Expr: exprNode})
+		default:
+			lit = append(lit, string(c)...)
+		}
+	}
 }
 
 func (p *parser) strlit() Node {
@@ -405,13 +618,20 @@ func (p *parser) strlit() Node {
 	str := []byte{}
 
 	for {
+		if len(p.s) == 0 {
+			panic(fmt.Errorf("unterminated string literal"))
+		}
 		c := p.s[0]
 		p.advance(1)
 		switch c {
 		case quote:
 			return StringNode{string(str)}
 		case '\\':
-			str = append(str, p.strescape(quote)...)
+			if quote == '\'' {
+				str = append(str, string(c)...)
+			} else {
+				str = append(str, p.strescape(quote)...)
+			}
 		default:
 			str = append(str, string(c)...)
 		}
@@ -437,7 +657,7 @@ func (p *parser) arraylit() Node {
 			p.advance(1)
 			return an
 		default:
-			panic(fmt.Errorf("Expected ',' or ']'"))
+			panic(fmt.Errorf("expected ',' or ']'"))
 		}
 	}
 }
@@ -471,12 +691,34 @@ func (p *parser) expr(depth int) Node {
 	case isidentstart(c):
 		tok := p.token(isident)
 		switch tok {
+		case "f":
+			// f-string: f"..." or f'...'
+			if p.peek() == '"' || p.peek() == '\'' {
+				n = p.fstrlit()
+				break
+			}
+			n = IdentNode{Identifier: tok}
 		case "not":
-			n = UnaryNode{Op: OpLogicalNot, Operand: p.expr(depthPrimaryExpr)}
+			n = UnaryNode{Op: OpLogicalNot, Operand: p.expr(depthMemberExpr)}
 		case "true":
 			n = BoolNode{Bool: true}
 		case "false":
 			n = BoolNode{Bool: false}
+		case "sizeof":
+			// sizeof<type> syntax
+			if p.peek() == '<' {
+				p.advance(1)
+				typeName := ""
+				for p.peek() != '>' && p.peek() != 0 {
+					typeName += string(p.next())
+				}
+				if p.next() != '>' {
+					panic(fmt.Errorf("expected '>'"))
+				}
+				n = SizeofNode{TypeName: typeName}
+			} else {
+				n = IdentNode{Identifier: tok}
+			}
 		default:
 			n = IdentNode{Identifier: tok}
 		}
@@ -492,6 +734,11 @@ func (p *parser) expr(depth int) Node {
 		}
 	case c == '[':
 		n = p.arraylit()
+	case c == '-':
+		// Unary negation
+		p.advance(1)
+		operand := p.expr(depthPrimaryExpr)
+		n = UnaryNode{Op: OpNegate, Operand: operand}
 	default:
 		panic(fmt.Errorf("expected primary expression"))
 	}
@@ -511,7 +758,46 @@ func (p *parser) expr(depth int) Node {
 			continue
 		case '.':
 			p.next()
-			n = MemberNode{Operand: n, Property: p.token(isident)}
+			prop := p.token(isident)
+			// Handle .as<type> cast syntax
+			if prop == "as" && p.peek() == '<' {
+				p.advance(1) // skip '<'
+				// Read type name until '>'
+				typeName := ""
+				for p.peek() != '>' && p.peek() != 0 {
+					typeName += string(p.next())
+				}
+				if p.next() != '>' {
+					panic(fmt.Errorf("expected '>'"))
+				}
+				n = CastNode{Operand: n, TypeName: typeName}
+				continue
+			}
+			n = MemberNode{Operand: n, Property: prop}
+			// Function call check is handled by the '(' case in the next iteration
+			continue
+		case '(':
+			// Function call: expr(args)
+			p.advance(1)
+			p.skipwhitespace()
+			var args []Node
+			if p.peek() != ')' {
+				args = append(args, p.expr(0))
+				for {
+					p.skipwhitespace()
+					if p.peek() != ',' {
+						break
+					}
+					p.advance(1)
+					p.skipwhitespace()
+					args = append(args, p.expr(0))
+				}
+			}
+			p.skipwhitespace()
+			if p.next() != ')' {
+				panic(fmt.Errorf("expected ')'"))
+			}
+			n = CallNode{Object: n, Args: args}
 			continue
 		case '[':
 			p.next()
@@ -623,25 +909,14 @@ func (p *parser) expr(depth int) Node {
 		if depth >= depthCompareExpr {
 			break
 		}
-		switch p.peek() {
-		case 'a':
-			p.next()
-			if p.peek() != 'n' && p.peek2() != 'd' {
-				panic(fmt.Errorf("expected 'and'"))
-			}
-			p.advance(2)
+		if p.consumeKeyword("and") {
 			n = BinaryNode{Op: OpLogicalAnd, A: n, B: p.expr(depthCompareExpr)}
 			continue
 		}
 		if depth >= depthAndExpr {
 			break
 		}
-		switch p.peek() {
-		case 'o':
-			p.next()
-			if p.next() != 'r' {
-				panic(fmt.Errorf("expected 'or'"))
-			}
+		if p.consumeKeyword("or") {
 			n = BinaryNode{Op: OpLogicalOr, A: n, B: p.expr(depthAndExpr)}
 			continue
 		}

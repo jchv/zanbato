@@ -1,0 +1,9 @@
+id: zb_debug_repeat_until
+data: zb_repeat_until_complex.bin
+asserts:
+  - actual: items.size
+    expected: 4
+  - actual: items[0]
+    expected: 0x10
+  - actual: items[3]
+    expected: 0x80

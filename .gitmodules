@@ -1,3 +1,9 @@
 [submodule "internal/third_party/kaitai_struct_tests"]
 	path = internal/third_party/kaitai_struct_tests
 	url = https://github.com/kaitai-io/kaitai_struct_tests.git
+[submodule "internal/third_party/kaitai_struct_formats"]
+	path = internal/third_party/kaitai_struct_formats
+	url = https://github.com/kaitai-io/kaitai_struct_formats
+[submodule "internal/third_party/kaitai_struct_compiler"]
+	path = internal/third_party/kaitai_struct_compiler
+	url = https://github.com/kaitai-io/kaitai_struct_compiler.git

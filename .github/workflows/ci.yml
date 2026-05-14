@@ -25,3 +25,6 @@ jobs:
       - name: Build
         run: nix build .
         if: success() || failure()
+      - name: Run Go tests
+        run: nix develop --command go test ./...
+        if: success() || failure()

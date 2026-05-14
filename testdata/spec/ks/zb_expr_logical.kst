@@ -1,0 +1,19 @@
+id: zb_expr_logical
+data: zb_expr_logical.bin
+asserts:
+  - actual: a
+    expected: 10
+  - actual: b
+    expected: 20
+  - actual: c
+    expected: 0
+  - actual: and_true
+    expected: true
+  - actual: and_false
+    expected: false
+  - actual: or_true
+    expected: true
+  - actual: or_false
+    expected: false
+  - actual: not_true
+    expected: true
