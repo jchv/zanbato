@@ -2,7 +2,7 @@
   description = "Go implementation of Kaitai Struct.";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs";
+    nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
     flake-utils.url = "github:numtide/flake-utils";
     kaitai_struct_tests = {
       url = "github:kaitai-io/kaitai_struct_tests";
