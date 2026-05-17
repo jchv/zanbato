@@ -35,6 +35,7 @@ func TestSpec(t *testing.T) {
 
 	// Create output directory
 	outDir := filepath.Join(wd, TestSpecPath)
+	require.NoError(t, os.RemoveAll(outDir))
 	formatsOutDir := filepath.Join(outDir, "test_formats")
 	specOutDir := filepath.Join(outDir, "spec")
 	require.NoError(t, os.MkdirAll(formatsOutDir, 0o755))
