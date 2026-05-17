@@ -720,6 +720,14 @@ func (e *Emitter) wrapAnyForArith(node expr.Node, exprStr string) string {
 	return exprStr
 }
 
+func (e *Emitter) wrapBitwiseResult(node expr.BinaryNode, exprStr string) string {
+	result := engine.ResultTypeOfNode(e.context, node)
+	if result == nil || e.declType(result) != "int" {
+		return exprStr
+	}
+	return fmt.Sprintf("int(int32(uint32(%s)))", exprStr)
+}
+
 func (e *Emitter) exprBinaryNode(t expr.BinaryNode) string {
 	cast := e.exprPromotionBinaryNode(t)
 	if cast != "" {
@@ -791,11 +799,11 @@ func (e *Emitter) exprBinaryNode(t expr.BinaryNode) string {
 	case expr.OpShiftRight:
 		return fmt.Sprintf("%s(%s) >> %s(%s)", cast, aExpr, cast, bExpr)
 	case expr.OpBitAnd:
-		return fmt.Sprintf("%s(%s) & %s(%s)", cast, aExpr, cast, bExpr)
+		return e.wrapBitwiseResult(t, fmt.Sprintf("%s(%s) & %s(%s)", cast, aExpr, cast, bExpr))
 	case expr.OpBitOr:
-		return fmt.Sprintf("%s(%s) | %s(%s)", cast, aExpr, cast, bExpr)
+		return e.wrapBitwiseResult(t, fmt.Sprintf("%s(%s) | %s(%s)", cast, aExpr, cast, bExpr))
 	case expr.OpBitXor:
-		return fmt.Sprintf("%s(%s) ^ %s(%s)", cast, aExpr, cast, bExpr)
+		return e.wrapBitwiseResult(t, fmt.Sprintf("%s(%s) ^ %s(%s)", cast, aExpr, cast, bExpr))
 	case expr.OpLogicalAnd:
 		return fmt.Sprintf("%s(%s) && %s(%s)", cast, aExpr, cast, bExpr)
 	case expr.OpLogicalOr:

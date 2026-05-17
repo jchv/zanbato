@@ -801,11 +801,23 @@ func evalShr(a *ExprValue, b *ExprValue) (*ExprValue, error) {
 	return nil, fmt.Errorf("unhandled right shift operand types: %s, %s", a.Kind, b.Kind)
 }
 
+func newSignedInt32IntegerValue(v *big.Int) *ExprValue {
+	var low32 big.Int
+	low32.And(v, big.NewInt(0xffffffff))
+	if low32.Bit(31) == 1 {
+		var mod32 big.Int
+		mod32.Lsh(big.NewInt(1), 32)
+		low32.Sub(&low32, &mod32)
+	}
+	return NewIntegerLiteralValue(&low32)
+}
+
 func evalBitAnd(a *ExprValue, b *ExprValue) (*ExprValue, error) {
 	switch {
 	case a.Kind == IntegerKind && b.Kind == IntegerKind:
 		var result big.Int
-		return NewIntegerLiteralValue(result.And(a.Integer.Value, b.Integer.Value)), nil
+		result.And(a.Integer.Value, b.Integer.Value)
+		return newSignedInt32IntegerValue(&result), nil
 	}
 	return nil, fmt.Errorf("unhandled bitwise and operand types: %s, %s", a.Kind, b.Kind)
 }
@@ -814,7 +826,8 @@ func evalBitOr(a *ExprValue, b *ExprValue) (*ExprValue, error) {
 	switch {
 	case a.Kind == IntegerKind && b.Kind == IntegerKind:
 		var result big.Int
-		return NewIntegerLiteralValue(result.Or(a.Integer.Value, b.Integer.Value)), nil
+		result.Or(a.Integer.Value, b.Integer.Value)
+		return newSignedInt32IntegerValue(&result), nil
 	}
 	return nil, fmt.Errorf("unhandled bitwise or operand types: %s, %s", a.Kind, b.Kind)
 }
@@ -823,7 +836,8 @@ func evalBitXor(a *ExprValue, b *ExprValue) (*ExprValue, error) {
 	switch {
 	case a.Kind == IntegerKind && b.Kind == IntegerKind:
 		var result big.Int
-		return NewIntegerLiteralValue(result.Xor(a.Integer.Value, b.Integer.Value)), nil
+		result.Xor(a.Integer.Value, b.Integer.Value)
+		return newSignedInt32IntegerValue(&result), nil
 	}
 	return nil, fmt.Errorf("unhandled bitwise xor operand types: %s, %s", a.Kind, b.Kind)
 }
