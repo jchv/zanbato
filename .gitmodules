@@ -7,3 +7,6 @@
 [submodule "internal/third_party/kaitai_struct_compiler"]
 	path = internal/third_party/kaitai_struct_compiler
 	url = https://github.com/kaitai-io/kaitai_struct_compiler.git
+[submodule "internal/third_party/kaitai_struct_java_runtime"]
+	path = internal/third_party/kaitai_struct_java_runtime
+	url = https://github.com/kaitai-io/kaitai_struct_java_runtime.git
