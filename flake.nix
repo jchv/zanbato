@@ -35,7 +35,7 @@
             ln -s ${kaitai_struct_formats} internal/third_party/kaitai_struct_formats
             find .
           '';
-          vendorHash = "sha256-e4F17QlwgnRpGU5mVpyl3Naj5OswQ7Rfu4bHaHgo9+8=";
+          vendorHash = "sha256-+mj7BXSGfDbotgy06FbCg06aBvwzDQzj8nOLsb6kRpM=";
 
           # Can't currently run checks in Nix due to impurity. :(
           doCheck = false;
