@@ -69,11 +69,7 @@ func (e *Emitter) strucWrite(unit *goUnit, gs *goStruct, val *engine.ExprValue, 
 				writeMethod.printf("if err = wstream.WriteBitsInt%s(%d, this._align_%d); err != nil { return err }", endianSuffix2, padBits, alignIdx)
 				alignIdx++
 			} else {
-				if bitsLE {
-					writeMethod.printf("if err = wstream.AlignToByteLe(); err != nil { return err }")
-				} else {
-					writeMethod.printf("if err = wstream.AlignToByte(); err != nil { return err }")
-				}
+				writeMethod.printf("if err = wstream.AlignToByte(); err != nil { return err }")
 			}
 			totalBits = 0
 		}
@@ -93,11 +89,7 @@ func (e *Emitter) strucWrite(unit *goUnit, gs *goStruct, val *engine.ExprValue, 
 			}
 			writeMethod.printf("if err = wstream.WriteBitsInt%s(%d, this._align_%d); err != nil { return err }", endianSuffix2, padBits, alignIdx)
 		} else {
-			if bitsLE {
-				writeMethod.printf("if err = wstream.AlignToByteLe(); err != nil { return err }")
-			} else {
-				writeMethod.printf("if err = wstream.AlignToByte(); err != nil { return err }")
-			}
+			writeMethod.printf("if err = wstream.AlignToByte(); err != nil { return err }")
 		}
 	}
 

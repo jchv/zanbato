@@ -275,7 +275,7 @@ go 1.24.0
 
 require (
 	test_formats v0.0.0
-	github.com/jchw-forks/kaitai_struct_go_runtime v0.0.0-20260516233112-d4c4efacc477
+	github.com/jchw-forks/kaitai_struct_go_runtime v0.0.0-20260517200451-5d903a377d07
 	github.com/stretchr/testify v1.11.1
 )
 
@@ -295,7 +295,7 @@ replace test_formats => ./test_formats
 go 1.24.0
 
 require (
-	github.com/jchw-forks/kaitai_struct_go_runtime v0.0.0-20260516233112-d4c4efacc477
+	github.com/jchw-forks/kaitai_struct_go_runtime v0.0.0-20260517200451-5d903a377d07
 )
 
 require (
