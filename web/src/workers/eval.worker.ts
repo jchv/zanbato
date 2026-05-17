@@ -58,16 +58,6 @@ async function boot(): Promise<void> {
   }
   const wasmExecSrc = await execResp.text();
   log.debug("wasm_exec.js fetched", wasmExecSrc.length, "bytes");
-  if (
-    !/(^|\n)\s*(?:"use strict"|globalThis\.Go|var Go|class Go)/m.test(
-      wasmExecSrc,
-    )
-  ) {
-    throw new Error(
-      "wasm_exec.js looks unexpected - server may have returned HTML; " +
-        "check that /wasm_exec.js is the Go bootstrap script.",
-    );
-  }
   // Indirect eval keeps assignments to `globalThis.*` visible to us.
   (0, eval)(wasmExecSrc);
   log.debug(
