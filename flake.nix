@@ -106,6 +106,7 @@
           nativeBuildInputs = [
             pkgs.go
             pkgs.gopls
+            pkgs.tinygo
           ];
         };
         devShells.validate = pkgs.mkShell {
@@ -113,8 +114,10 @@
           nativeBuildInputs = [
             pkgs.go
             pkgs.gopls
+            pkgs.tinygo
             pkgs.jdk
             pkgs.sbt
+            pkgs.coursier
           ];
         };
       }
