@@ -39,7 +39,6 @@ func TestCodeGeneration(t *testing.T) {
 	})
 
 	for _, match := range matches {
-		match := match
 		name := filepath.Base(match)
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
