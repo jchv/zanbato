@@ -1,3 +1,3 @@
 id: zb_valid_expr
 data: zb_valid_expr.bin
-exception: ValidationExprError
+exception: ValidationExprError<u1>

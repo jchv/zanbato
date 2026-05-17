@@ -8,8 +8,8 @@ seq:
     type:
       switch-on: magic
       cases:
-        '"AB"': body_ab
-        '"CD"': body_cd
+        '[0x41, 0x42]': body_ab
+        '[0x43, 0x44]': body_cd
 types:
   body_ab:
     seq:

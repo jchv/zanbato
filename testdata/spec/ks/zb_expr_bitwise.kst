@@ -8,6 +8,6 @@ asserts:
   - actual: band
     expected: 0xEF
   - actual: bor
-    expected: 0xFFADBEEF
+    expected: -5390609
   - actual: bxor
     expected: 0x21524110

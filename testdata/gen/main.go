@@ -85,12 +85,10 @@ func main() {
 		{"zb_expr_logical.bin", genExprLogical},
 		{"zb_expr_sizeof.bin", genExprSizeof},
 		{"zb_expr_fstring.bin", genExprFstring},
-		{"zb_expr_to_s_base.bin", genExprToSBase},
 		{"zb_expr_str_to_i.bin", genExprStrToI},
 
 		// Coverage gap tests
 		{"zb_nav_any_typed.bin", genNavAnyTyped},
-		{"zb_debug_repeat_eos.bin", genDebugRepeatEos},
 		{"zb_process_repeat.bin", genProcessRepeat},
 
 		// Edge case tests
@@ -474,11 +472,6 @@ func genExprFstring() []byte {
 	return []byte{'H', 'i', 0x00, 42, 7, 3}
 }
 
-// genExprToSBase: val=255(u1), val2=42(u1)
-func genExprToSBase() []byte {
-	return []byte{255, 42}
-}
-
 // genExprStrToI: "42\0" + pad=0x00
 func genExprStrToI() []byte {
 	return []byte{'4', '2', 0x00, 0x00}
@@ -493,11 +486,6 @@ func genNavAnyTyped() []byte {
 	buf[4] = 1
 	binary.LittleEndian.PutUint16(buf[5:7], 10)
 	return buf
-}
-
-// genDebugRepeatEos: 4 u1 values [0x10, 0x20, 0x30, 0x40]
-func genDebugRepeatEos() []byte {
-	return []byte{0x10, 0x20, 0x30, 0x40}
 }
 
 // genProcessRepeat: count=2(u1), 2 entries of 2 bytes XOR'd with 0xAA

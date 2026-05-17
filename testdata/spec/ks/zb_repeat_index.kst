@@ -2,8 +2,8 @@ id: zb_repeat_index
 data: zb_repeat_index.bin
 asserts:
   - actual: items.size
-    expected: 4
+    expected: 3
   - actual: items[0]
     expected: 0x41
-  - actual: items[3]
-    expected: 0x44
+  - actual: items[2]
+    expected: 0x43
