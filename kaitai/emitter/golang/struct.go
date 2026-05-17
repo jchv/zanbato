@@ -29,14 +29,15 @@ const (
 
 // Emitter emits Go code for kaitai structs.
 type Emitter struct {
-	pkgname   string
-	pkgpath   string
-	resolver  resolve.Resolver
-	endian    types.EndianKind
-	bitEndian types.BitEndianKind
-	context   *engine.Context
-	artifacts []emitter.Artifact
-	visited   map[*kaitai.Struct]struct{}
+	pkgname     string
+	pkgpath     string
+	resolver    resolve.Resolver
+	endian      types.EndianKind
+	bitEndian   types.BitEndianKind
+	context     *engine.Context
+	artifacts   []emitter.Artifact
+	visited     map[*kaitai.Struct]struct{}
+	debugAlways bool
 
 	needRoot    bool
 	needParent  bool
@@ -71,6 +72,12 @@ func NewEmitter(pkgpath string, resolver resolve.Resolver) *Emitter {
 	}
 }
 
+// SetDebug controls whether debug features are unconditionally enabled for
+// all generated code.
+func (e *Emitter) SetDebug(enabled bool) {
+	e.debugAlways = enabled
+}
+
 // Emit emits Go code for the given kaitai struct.
 func (e *Emitter) Emit(inputname string, s *kaitai.Struct) []emitter.Artifact {
 	e.endian = types.UnspecifiedOrder
@@ -90,7 +97,7 @@ func (e *Emitter) Emit(inputname string, s *kaitai.Struct) []emitter.Artifact {
 	e.rootTypeName = ""
 	e.rootDepth = 0
 	e.opaqueTypes = false
-	e.debug = false
+	e.debug = e.debugAlways
 
 	e.root(inputname, s)
 	return e.artifacts
@@ -893,7 +900,7 @@ func (e *Emitter) root(inputname string, s *kaitai.Struct) {
 	}
 	e.rootDepth++
 	e.opaqueTypes = s.Meta.OpaqueTypes
-	e.debug = s.Meta.Debug
+	e.debug = s.Meta.Debug || e.debugAlways
 
 	e.struc(inputname, &unit, root)
 

@@ -13,6 +13,7 @@ import (
 func main() {
 	pkg := flag.String("pkg", "", "Go package path to use")
 	out := flag.String("out", "", "File system output path to use")
+	debug := flag.Bool("debug", false, "Enable debug features in generated code")
 	flag.Parse()
 	if flag.NArg() != 1 {
 		log.Fatalln("Wrong number of arguments; pass your root .ksy path.")
@@ -20,6 +21,7 @@ func main() {
 	rootname := flag.Arg(0)
 	resolver := resolve.NewOSResolver()
 	emitter := golang.NewEmitter(*pkg, resolver)
+	emitter.SetDebug(*debug)
 	basename, struc, err := resolver.Resolve("", rootname)
 	if err != nil {
 		log.Fatalf("Error resolving root struct: %v", err)
