@@ -27,26 +27,15 @@ jobs:
         with:
           submodules: true
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: lts/*
-          cache: npm
-          cache-dependency-path: web/package-lock.json
+      - uses: NixOS/nix-installer-action@main
 
       - name: Install dependencies
         working-directory: web
-        run: npm ci
+        run: nix develop --command npm ci
 
       - name: Build
         working-directory: web
-        run: npm run build -- --base "/${{ github.event.repository.name }}/"
+        run: nix develop --command npm run build -- --base "/${{ github.event.repository.name }}/"
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
