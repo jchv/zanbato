@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
-# Build the zanbato WebAssembly module and stage it (plus Go's wasm_exec.js
-# bootstrapper) into web/public/ for the Vite frontend to serve.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-GOROOT="$(go env GOROOT)"
-
 # Go 1.21+ moved wasm_exec.js from misc/wasm to lib/wasm. Probe both.
+GOROOT="$(go env GOROOT)"
 WASM_EXEC=""
 for candidate in "$GOROOT/lib/wasm/wasm_exec.js" "$GOROOT/misc/wasm/wasm_exec.js"; do
     if [[ -f "$candidate" ]]; then
