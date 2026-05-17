@@ -818,6 +818,7 @@ func (t *Tree) readRepeated(n *Node, ref *types.TypeRef) error {
 			n.items = append(n.items, elem)
 			nextPos = int64(elem.span.EndIndex)
 
+			i++
 			done, err := t.evaluateExprWithTemp(n.parent, repeat.UntilExpr, elem, i)
 			t.popIndex()
 			if err != nil {
@@ -826,7 +827,6 @@ func (t *Tree) readRepeated(n *Node, ref *types.TypeRef) error {
 			if done.Kind == engine.BooleanKind && done.Boolean.Value {
 				break
 			}
-			i++
 		}
 
 	default:
@@ -1010,6 +1010,7 @@ func (t *Tree) readRepeatedSwitch(n *Node, ts *types.TypeSwitch) error {
 			}
 			n.items = append(n.items, elem)
 			nextPos = int64(elem.span.EndIndex)
+			i++
 			done, err := t.evaluateExprWithTemp(n.parent, repeat.UntilExpr, elem, i)
 			if err != nil {
 				return fmt.Errorf("evaluating repeat-until for %s: %w", n.path, err)
@@ -1017,7 +1018,6 @@ func (t *Tree) readRepeatedSwitch(n *Node, ts *types.TypeSwitch) error {
 			if done.Kind == engine.BooleanKind && done.Boolean.Value {
 				break
 			}
-			i++
 		}
 	default:
 		return fmt.Errorf("unsupported repeat type for switch %s", n.path)

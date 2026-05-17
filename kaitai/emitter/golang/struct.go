@@ -1526,7 +1526,9 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprValue, forc
 				}
 				oldContext := e.context
 				e.context = e.context.WithTemporary(engine.NewAliasSymbol(typ, fmt.Sprintf("tmp%d", fn.tmp)))
-				fn.printf("for i := 0; ; i++ {").indent()
+				fn.printf("{").indent()
+				fn.printf("i := 0")
+				fn.printf("for {").indent()
 				fn.printf("_ = i")
 				if debugRead {
 					e.emitDebugArrElemStart(fn, ksFieldName)
@@ -1541,8 +1543,10 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprValue, forc
 					e.emitDebugArrElemEnd(fn, ksFieldName)
 					debugErrCheck()
 				}
+				fn.printf("i++")
 				fn.printf("if bool(%s) {", e.expr(repeat.UntilExpr)).indent()
 				fn.printf("break")
+				fn.unindent().printf("}")
 				fn.unindent().printf("}")
 				fn.unindent().printf("}")
 				e.context = oldContext
@@ -1674,7 +1678,9 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprValue, forc
 				}
 				oldContext := e.context
 				e.context = e.context.WithTemporary(engine.NewAliasSymbol(typ, fmt.Sprintf("tmp%d", fn.tmp)))
-				fn.printf("for i := 0; ; i++ {").indent()
+				fn.printf("{").indent()
+				fn.printf("i := 0")
+				fn.printf("for {").indent()
 				fn.printf("_ = i")
 				if e.debug {
 					e.emitDebugArrElemStart(fn, ksFieldName)
@@ -1691,8 +1697,10 @@ func (e *Emitter) readAttr(unit *goUnit, fn *goFunc, typ *engine.ExprValue, forc
 				if e.debug {
 					e.emitDebugArrElemEnd(fn, ksFieldName)
 				}
+				fn.printf("i++")
 				fn.printf("if bool(%s) {", e.expr(repeat.UntilExpr)).indent()
 				fn.printf("break")
+				fn.unindent().printf("}")
 				fn.unindent().printf("}")
 				fn.unindent().printf("}")
 				e.context = oldContext
