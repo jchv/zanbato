@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/davecgh/go-spew v1.1.1
-	github.com/jchw-forks/kaitai_struct_go_runtime v0.0.0-20260517201212-9f2a870c98d1
+	github.com/jchw-forks/kaitai_struct_go_runtime v0.0.0-20260517204442-6ad332f7ef0a
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/text v0.37.0
 	golang.org/x/tools v0.45.0
