@@ -26,7 +26,7 @@ export function MonacoEditor({
       value={value}
       language={language}
       path={path!}
-      theme="vs-dark"
+      theme="zanbato"
       onChange={handleChange}
       options={{
         minimap: { enabled: false },

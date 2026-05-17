@@ -9,4 +9,13 @@ self.MonacoEnvironment = {
   },
 };
 
+monaco.editor.defineTheme("zanbato", {
+  base: "vs-dark",
+  inherit: true,
+  rules: [],
+  colors: {
+    "editor.background": "#0e1419",
+  },
+});
+
 loader.config({ monaco });
