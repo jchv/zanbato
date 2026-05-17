@@ -1269,7 +1269,7 @@ func (e *Emitter) emitProcessReverse(fn *goFunc, unit *goUnit, process *expr.Exp
 				}
 				return
 			case "zlib":
-				fn.printf("%s, err = kaitai.ProcessZlibCompress(%s)", varName, varName)
+				fn.printf("%s, err = kaitai.UnprocessZlib(%s)", varName, varName)
 				fn.printf("if err != nil { return err }")
 				return
 			}
@@ -1297,7 +1297,7 @@ func (e *Emitter) emitProcessReverse(fn *goFunc, unit *goUnit, process *expr.Exp
 				}
 				return
 			case "zlib":
-				fn.printf("%s, err = kaitai.ProcessZlibCompress(%s)", varName, varName)
+				fn.printf("%s, err = kaitai.UnprocessZlib(%s)", varName, varName)
 				fn.printf("if err != nil { return err }")
 				return
 			}
@@ -1305,7 +1305,7 @@ func (e *Emitter) emitProcessReverse(fn *goFunc, unit *goUnit, process *expr.Exp
 	case expr.IdentNode:
 		switch n.Identifier {
 		case "zlib":
-			fn.printf("%s, err = kaitai.ProcessZlibCompress(%s)", varName, varName)
+			fn.printf("%s, err = kaitai.UnprocessZlib(%s)", varName, varName)
 			fn.printf("if err != nil { return err }")
 			return
 		default:
