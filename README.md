@@ -1,4 +1,4 @@
-[Web Editor](https://jchv.github.io/zanbato/)
+[Web Editor](https://jchv.github.io/zanbato/) &bull; [![Go Report Card](https://goreportcard.com/badge/github.com/jchv/zanbato)](https://goreportcard.com/report/github.com/jchv/zanbato) &bull; [![CI](https://github.com/jchv/zanbato/actions/workflows/ci.yml/badge.svg)](https://github.com/jchv/zanbato/actions/workflows/ci.yml)
 
 # Zanbato
 
@@ -12,7 +12,7 @@ Zanbato currently passes the full upstream Kaitai Struct test suite, plus additi
 
 All of the Kaitai Struct features should work, including:
 
-- Structures
+- ✅ Structures
   + ✅ Basic data types (integers, strings, bits, bytes, etc.)
   + ✅ Type switches
   + ✅ Endianness
