@@ -1,3 +1,5 @@
+[Web Editor](https://jchv.github.io/zanbato/)
+
 # Zanbato
 
 Zanbato is a compiler and runtime evaluator implementation for Kaitai Struct .ksy files written in Go and mainly targeting Go. It has fairly complete support for the features of Kaitai Struct.
