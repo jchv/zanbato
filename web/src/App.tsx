@@ -27,16 +27,23 @@ const components: Record<
 
 function onReady(event: DockviewReadyEvent) {
   event.api.addPanel({
-    id: "project",
-    component: "project",
-    title: "Project",
-    initialWidth: 200,
-  });
-  event.api.addPanel({
     id: "editor",
     component: "editor",
     title: "Editor",
-    position: { referencePanel: "project", direction: "right" },
+  });
+  event.api.addPanel({
+    id: "project",
+    component: "project",
+    title: "Project",
+    initialWidth: 250,
+    position: { referencePanel: "editor", direction: "left" },
+  });
+  event.api.addPanel({
+    id: "tree",
+    component: "tree",
+    title: "Tree",
+    position: { referencePanel: "editor", direction: "right" },
+    initialWidth: 350,
   });
   event.api.addPanel({
     id: "hex",
@@ -44,18 +51,11 @@ function onReady(event: DockviewReadyEvent) {
     title: "Hex",
     position: { referencePanel: "editor", direction: "below" },
   });
-  event.api.addPanel({
-    id: "tree",
-    component: "tree",
-    title: "Tree",
-    position: { referencePanel: "editor", direction: "right" },
-    initialWidth: 200,
-  });
 }
 
 const SEED_KSY_SOURCE = [
   "meta:",
-  "  id: smoke",
+  "  id: hello",
   "seq:",
   "  - id: magic",
   "    contents: [0xCA, 0xFE]",
