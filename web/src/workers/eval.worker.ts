@@ -51,8 +51,8 @@ function dispatch(req: EvalRequest): EvalResponse {
 
 async function boot(): Promise<void> {
   log.debug("boot starting");
-  log.debug("fetching /wasm_exec.js");
-  const execResp = await fetch("/wasm_exec.js");
+  log.debug("fetching wasm_exec.js");
+  const execResp = await fetch(`${import.meta.env.BASE_URL}wasm_exec.js`);
   if (!execResp.ok) {
     throw new Error(`wasm_exec.js fetch failed: HTTP ${execResp.status}`);
   }
@@ -81,9 +81,9 @@ async function boot(): Promise<void> {
   }
   const go = new GoCtor();
 
-  log.debug("fetching /zanbato.wasm");
+  log.debug("fetching zanbato.wasm");
   const { instance } = await WebAssembly.instantiateStreaming(
-    fetch("/zanbato.wasm"),
+    fetch(`${import.meta.env.BASE_URL}zanbato.wasm`),
     go.importObject,
   );
   log.debug("wasm instantiated; starting Go runtime");
