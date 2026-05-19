@@ -5,7 +5,6 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 )
@@ -86,6 +85,7 @@ func main() {
 		{"zb_expr_sizeof.bin", genExprSizeof},
 		{"zb_expr_fstring.bin", genExprFstring},
 		{"zb_expr_str_to_i.bin", genExprStrToI},
+		{"zb_expr_precedence.bin", genExprPrecedence},
 
 		// Coverage gap tests
 		{"zb_nav_any_typed.bin", genNavAnyTyped},
@@ -477,6 +477,12 @@ func genExprStrToI() []byte {
 	return []byte{'4', '2', 0x00, 0x00}
 }
 
+// genExprPrecedence: single dummy byte; the test exercises constant-folded
+// instance expressions, not field data.
+func genExprPrecedence() []byte {
+	return []byte{0x00}
+}
+
 // === Coverage Gap Tests ===
 
 // genNavAnyTyped: multiplier=3(u4le), tag=1(u1), val=10(u2le)
@@ -566,7 +572,3 @@ func genRepeatIndex() []byte {
 func genValidInEnum() []byte {
 	return []byte{99}
 }
-
-// Ensure math and fmt are used
-var _ = math.MaxFloat64
-var _ = fmt.Sprintf

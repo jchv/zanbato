@@ -1,0 +1,13 @@
+id: zb_expr_precedence
+data: zb_expr_precedence.bin
+asserts:
+  - actual: dummy
+    expected: 0
+  - actual: add_shl
+    expected: 24
+  - actual: or_xor
+    expected: 1
+  - actual: or_and
+    expected: 255
+  - actual: and_shl
+    expected: 16

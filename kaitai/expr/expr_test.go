@@ -62,6 +62,33 @@ func TestParseExpr(t *testing.T) {
 	}
 }
 
+func TestParseExprPrecedence(t *testing.T) {
+	// Since the AST String method returns parenthesized expressions, it is
+	// possible to test precedence just using the String method.
+	tests := []struct {
+		Source string
+		Want   string
+	}{
+		{"1 + 2 << 3", "((1) + (2)) << (3)"},
+		{"1 << 2 + 3", "(1) << ((2) + (3))"},
+		{"1 | 2 ^ 3", "(1) | ((2) ^ (3))"},
+		{"1 ^ 2 | 3", "((1) ^ (2)) | (3)"},
+		{"0xff & 0x80 | 0x10", "((255) & (128)) | (16)"},
+		{"0x10 & 0xff << 4", "(16) & ((255) << (4))"},
+		{"a == b | c", "(a) == ((b) | (c))"},
+		{"a + b * c", "(a) + ((b) * (c))"},
+		{"a - b - c", "((a) - (b)) - (c)"},
+		{"a << b << c", "((a) << (b)) << (c)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.Source, func(t *testing.T) {
+			expr, err := ParseExpr(tc.Source)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.Want, expr.Root.String())
+		})
+	}
+}
+
 func TestParseExprError(t *testing.T) {
 	tests := []struct {
 		Source      string

@@ -45,8 +45,6 @@ var resolverPaths = []string{
 func TestKST(t *testing.T) {
 	resolver := resolve.NewOSResolverWithPaths(resolverPaths)
 
-	var totalPass, totalFail, totalSkip, totalErr int
-
 	for _, src := range testSources {
 		kstFiles, err := filepath.Glob(filepath.Join(src.kstDir, "*.kst"))
 		if err != nil {
@@ -57,13 +55,7 @@ func TestKST(t *testing.T) {
 		for _, kstFile := range kstFiles {
 			spec, err := kst.ParseFile(kstFile)
 			if err != nil {
-				totalErr++
-				continue
-			}
-
-			// Skip exception tests (the parse itself should fail)
-			if spec.Exception != nil {
-				totalSkip++
+				t.Errorf("error: could not parse %s: %v", kstFile, err)
 				continue
 			}
 
@@ -73,7 +65,7 @@ func TestKST(t *testing.T) {
 				ksyPath := filepath.Join(src.formatsDir, spec.ID+".ksy")
 				basename, struc, err := resolver.Resolve("", ksyPath)
 				if err != nil {
-					t.Skipf("could not resolve KSY %s: %v", spec.ID, err)
+					t.Errorf("could not resolve KSY %s: %v", spec.ID, err)
 					return
 				}
 
@@ -87,7 +79,7 @@ func TestKST(t *testing.T) {
 				dataPath := filepath.Join(src.srcDir, spec.Data)
 				f, err := os.Open(dataPath)
 				if err != nil {
-					t.Skipf("could not open data %s: %v", dataPath, err)
+					t.Errorf("could not open data %s: %v", dataPath, err)
 					return
 				}
 				defer func() { _ = f.Close() }()
@@ -120,10 +112,6 @@ func TestKST(t *testing.T) {
 			})
 		}
 	}
-
-	// Count results from sub-tests
-	t.Logf("KST summary: %d passed, %d failed, %d skipped, %d errors",
-		totalPass, totalFail, totalSkip, totalErr)
 }
 
 func runEqualsAssertion(t *testing.T, tree *Tree, root *Node, idx int, a kst.TestEquals) {

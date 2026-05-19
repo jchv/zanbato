@@ -667,6 +667,10 @@ const (
 	depthOrExpr
 	depthAndExpr
 	depthCompareExpr
+	depthBitOrExpr
+	depthBitXorExpr
+	depthBitAndExpr
+	depthShiftExpr
 	depthAddExpr
 	depthMultExpr
 	depthMemberExpr
@@ -825,26 +829,6 @@ func (p *parser) expr(depth int) Node {
 			p.next()
 			n = BinaryNode{Op: OpMod, A: n, B: p.expr(depthMemberExpr)}
 			continue
-		case '>':
-			if p.peek2() != '>' {
-				break
-			}
-			p.next()
-			p.next()
-			n = BinaryNode{Op: OpShiftRight, A: n, B: p.expr(depthMemberExpr)}
-			continue
-		case '<':
-			if p.peek2() != '<' {
-				break
-			}
-			p.next()
-			p.next()
-			n = BinaryNode{Op: OpShiftLeft, A: n, B: p.expr(depthMemberExpr)}
-			continue
-		case '&':
-			p.next()
-			n = BinaryNode{Op: OpBitAnd, A: n, B: p.expr(depthMemberExpr)}
-			continue
 		}
 		if depth >= depthMultExpr {
 			break
@@ -858,16 +842,53 @@ func (p *parser) expr(depth int) Node {
 			p.next()
 			n = BinaryNode{Op: OpSub, A: n, B: p.expr(depthMultExpr)}
 			continue
-		case '|':
-			p.next()
-			n = BinaryNode{Op: OpBitOr, A: n, B: p.expr(depthMultExpr)}
-			continue
-		case '^':
-			p.next()
-			n = BinaryNode{Op: OpBitXor, A: n, B: p.expr(depthMultExpr)}
-			continue
 		}
 		if depth >= depthAddExpr {
+			break
+		}
+		switch p.peek() {
+		case '<':
+			if p.peek2() != '<' {
+				break
+			}
+			p.next()
+			p.next()
+			n = BinaryNode{Op: OpShiftLeft, A: n, B: p.expr(depthAddExpr)}
+			continue
+		case '>':
+			if p.peek2() != '>' {
+				break
+			}
+			p.next()
+			p.next()
+			n = BinaryNode{Op: OpShiftRight, A: n, B: p.expr(depthAddExpr)}
+			continue
+		}
+		if depth >= depthShiftExpr {
+			break
+		}
+		if p.peek() == '&' {
+			p.next()
+			n = BinaryNode{Op: OpBitAnd, A: n, B: p.expr(depthShiftExpr)}
+			continue
+		}
+		if depth >= depthBitAndExpr {
+			break
+		}
+		if p.peek() == '^' {
+			p.next()
+			n = BinaryNode{Op: OpBitXor, A: n, B: p.expr(depthBitAndExpr)}
+			continue
+		}
+		if depth >= depthBitXorExpr {
+			break
+		}
+		if p.peek() == '|' {
+			p.next()
+			n = BinaryNode{Op: OpBitOr, A: n, B: p.expr(depthBitXorExpr)}
+			continue
+		}
+		if depth >= depthBitOrExpr {
 			break
 		}
 		switch p.peek() {
@@ -876,33 +897,33 @@ func (p *parser) expr(depth int) Node {
 				panic(fmt.Errorf("expected '=', got %q", p.peek2()))
 			}
 			p.advance(2)
-			n = BinaryNode{Op: OpEqual, A: n, B: p.expr(depthAddExpr)}
+			n = BinaryNode{Op: OpEqual, A: n, B: p.expr(depthBitOrExpr)}
 			continue
 		case '!':
 			if p.peek2() != '=' {
 				panic(fmt.Errorf("expected '=', got %q", p.peek2()))
 			}
 			p.advance(2)
-			n = BinaryNode{Op: OpNotEqual, A: n, B: p.expr(depthAddExpr)}
+			n = BinaryNode{Op: OpNotEqual, A: n, B: p.expr(depthBitOrExpr)}
 			continue
 		case '<':
 			p.next()
 			if p.peek() == '=' {
 				p.next()
-				n = BinaryNode{Op: OpLessThanEqual, A: n, B: p.expr(depthAddExpr)}
+				n = BinaryNode{Op: OpLessThanEqual, A: n, B: p.expr(depthBitOrExpr)}
 				continue
 			} else {
-				n = BinaryNode{Op: OpLessThan, A: n, B: p.expr(depthAddExpr)}
+				n = BinaryNode{Op: OpLessThan, A: n, B: p.expr(depthBitOrExpr)}
 				continue
 			}
 		case '>':
 			p.next()
 			if p.peek() == '=' {
 				p.next()
-				n = BinaryNode{Op: OpGreaterThanEqual, A: n, B: p.expr(depthAddExpr)}
+				n = BinaryNode{Op: OpGreaterThanEqual, A: n, B: p.expr(depthBitOrExpr)}
 				continue
 			} else {
-				n = BinaryNode{Op: OpGreaterThan, A: n, B: p.expr(depthAddExpr)}
+				n = BinaryNode{Op: OpGreaterThan, A: n, B: p.expr(depthBitOrExpr)}
 				continue
 			}
 		}
