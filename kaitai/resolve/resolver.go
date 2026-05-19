@@ -43,7 +43,8 @@ func NewOSResolverWithPaths(importPaths []string) Resolver {
 
 func NewFSResolver(fs fs.FS) Resolver {
 	return &fileResolver{
-		cache: make(map[string]*kaitai.Struct),
+		cache:       make(map[string]*kaitai.Struct),
+		importPaths: []string{"."},
 		open: func(name string) (io.ReadCloser, error) {
 			return fs.Open(name)
 		},

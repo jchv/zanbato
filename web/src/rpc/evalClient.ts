@@ -1,5 +1,10 @@
 import { createLogger } from "../log";
-import type { EvalRequest, EvalResponse, WorkerEvent } from "./protocol";
+import type {
+  EvalRequest,
+  EvalResponse,
+  KsyFile,
+  WorkerEvent,
+} from "./protocol";
 
 const log = createLogger("rpc");
 
@@ -45,8 +50,8 @@ export class EvalClient {
     return this.readyPromise;
   }
 
-  async loadKsy(name: string, source: string): Promise<void> {
-    const r = await this.call({ type: "loadKsy", name, source });
+  async loadKsys(files: KsyFile[]): Promise<void> {
+    const r = await this.call({ type: "loadKsys", files });
     return unwrap(r);
   }
 
@@ -57,11 +62,6 @@ export class EvalClient {
       throw new Error("parse: response missing tree");
     }
     return r.tree;
-  }
-
-  async clearVfs(): Promise<void> {
-    const r = await this.call({ type: "clearVfs" });
-    return unwrap(r);
   }
 
   terminate(): void {

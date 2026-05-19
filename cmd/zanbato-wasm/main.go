@@ -7,13 +7,14 @@
 //
 // API:
 //
-//	zanbato.loadKsy(name: string, source: string) -> {ok: true} | {ok: false, error: string}
-//	zanbato.parse(rootName: string, data: Uint8Array) -> {ok: true, tree: string (JSON)} | {ok: false, error: string}
-//	zanbato.clearVfs() -> {ok: true}
+//	zanbato.loadKsys(files: Array<{name: string, source: string}>)
+//	    -> {ok: true} | {ok: false, error: string}
+//	zanbato.parse(rootName: string, data: Uint8Array)
+//	    -> {ok: true, tree: string (JSON)} | {ok: false, error: string}
 //
-// All KSY sources passed via loadKsy are stored in an in-memory VFS keyed by
-// `name + ".ksy"`; relative imports within KSY files resolve against that
-// VFS the same way the OS resolver resolves against the filesystem.
+// loadKsys atomically replaces the in-memory VFS with the supplied set of
+// files; each entry's `name` becomes a VFS path with `.ksy` appended.
+// Callers are expected to pass the full transitive import graph.
 package main
 
 import (
@@ -33,32 +34,36 @@ var vfs = fstest.MapFS{}
 
 func main() {
 	zanbato := js.Global().Get("Object").New()
-	zanbato.Set("loadKsy", js.FuncOf(loadKsy))
+	zanbato.Set("loadKsys", js.FuncOf(loadKsys))
 	zanbato.Set("parse", js.FuncOf(parse))
-	zanbato.Set("clearVfs", js.FuncOf(clearVfs))
 	js.Global().Set("zanbato", zanbato)
 
 	// Keep the runtime alive so the registered functions remain callable.
 	select {}
 }
 
-func loadKsy(_ js.Value, args []js.Value) (ret any) {
+func loadKsys(_ js.Value, args []js.Value) (ret any) {
 	defer func() {
 		if r := recover(); r != nil {
 			ret = errResult(fmt.Sprintf("panic: %v", r))
 		}
 	}()
-	if len(args) != 2 {
-		return errResult("loadKsy: expected (name, source)")
+	if len(args) != 1 {
+		return errResult("loadKsys: expected (files)")
 	}
-	name := args[0].String()
-	source := args[1].String()
-	vfs[name+".ksy"] = &fstest.MapFile{Data: []byte(source)}
-	return okResult(nil)
-}
-
-func clearVfs(_ js.Value, _ []js.Value) any {
-	vfs = fstest.MapFS{}
+	files := args[0]
+	if files.Type() != js.TypeObject {
+		return errResult("loadKsys: files must be an array")
+	}
+	n := files.Get("length").Int()
+	newVfs := fstest.MapFS{}
+	for i := range n {
+		entry := files.Index(i)
+		name := entry.Get("name").String()
+		source := entry.Get("source").String()
+		newVfs[name+".ksy"] = &fstest.MapFile{Data: []byte(source)}
+	}
+	vfs = newVfs
 	return okResult(nil)
 }
 

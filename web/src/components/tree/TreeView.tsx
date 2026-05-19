@@ -63,7 +63,7 @@ interface TreeRowsProps {
   selectedPath: string | null;
   onSelect: (path: string) => void;
   onToggle: (path: string) => void;
-  selectedRef: React.RefObject<HTMLDivElement>;
+  selectedRef: React.RefObject<HTMLDivElement | null>;
 }
 
 function TreeRows({

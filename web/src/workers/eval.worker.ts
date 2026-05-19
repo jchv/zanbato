@@ -1,13 +1,17 @@
 /// <reference lib="webworker" />
 import { createLogger } from "../log";
-import type { EvalRequest, EvalResponse, RpcRequest } from "../rpc/protocol";
+import type {
+  EvalRequest,
+  EvalResponse,
+  KsyFile,
+  RpcRequest,
+} from "../rpc/protocol";
 
 const log = createLogger("worker.boot");
 
 interface ZanbatoAPI {
-  loadKsy: (name: string, source: string) => EvalResponse;
+  loadKsys: (files: KsyFile[]) => EvalResponse;
   parse: (rootName: string, data: Uint8Array) => EvalResponse;
-  clearVfs: () => EvalResponse;
 }
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -40,12 +44,10 @@ function dispatch(req: EvalRequest): EvalResponse {
     return { ok: false, error: "wasm not initialized" };
   }
   switch (req.type) {
-    case "loadKsy":
-      return api.loadKsy(req.name, req.source);
+    case "loadKsys":
+      return api.loadKsys(req.files);
     case "parse":
       return api.parse(req.rootName, req.data);
-    case "clearVfs":
-      return api.clearVfs();
   }
 }
 

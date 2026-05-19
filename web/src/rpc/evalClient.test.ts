@@ -74,13 +74,12 @@ describe("EvalClient", () => {
   describe("request correlation", () => {
     it("returns the response matched by id", async () => {
       const { client, worker } = makeClient();
-      const p = client.loadKsy("foo", "src");
+      const p = client.loadKsys([{ name: "foo", source: "src" }]);
       expect(worker.sent).toHaveLength(1);
       const req = worker.sent[0]!;
       expect(req.request).toEqual({
-        type: "loadKsy",
-        name: "foo",
-        source: "src",
+        type: "loadKsys",
+        files: [{ name: "foo", source: "src" }],
       });
       worker.emit({ id: req.id, response: { ok: true } });
       await expect(p).resolves.toBeUndefined();
@@ -88,8 +87,8 @@ describe("EvalClient", () => {
 
     it("handles concurrent requests properly", async () => {
       const { client, worker } = makeClient();
-      const p1 = client.loadKsy("a", "src-a");
-      const p2 = client.loadKsy("b", "src-b");
+      const p1 = client.loadKsys([{ name: "a", source: "src-a" }]);
+      const p2 = client.loadKsys([{ name: "b", source: "src-b" }]);
       const p3 = client.parse("a", new Uint8Array([1, 2, 3]));
 
       expect(worker.sent).toHaveLength(3);
@@ -108,7 +107,7 @@ describe("EvalClient", () => {
 
     it("ignores stale or duplicate responses", async () => {
       const { client, worker } = makeClient();
-      const p = client.loadKsy("foo", "src");
+      const p = client.loadKsys([{ name: "foo", source: "src" }]);
       const id = worker.sent[0]!.id;
       worker.emit({ id, response: { ok: true } });
       // Duplicate - should be silently ignored.
@@ -126,9 +125,9 @@ describe("EvalClient", () => {
   });
 
   describe("error paths", () => {
-    it("rejects loadKsy with the worker-supplied error message", async () => {
+    it("rejects loadKsys with the worker-supplied error message", async () => {
       const { client, worker } = makeClient();
-      const p = client.loadKsy("bad", "src");
+      const p = client.loadKsys([{ name: "bad", source: "src" }]);
       worker.emit({
         id: worker.sent[0]!.id,
         response: { ok: false, error: "parse failed" },
@@ -157,7 +156,7 @@ describe("EvalClient", () => {
   describe("termination", () => {
     it("rejects all pending requests on terminate", async () => {
       const { client, worker } = makeClient();
-      const p1 = client.loadKsy("a", "src");
+      const p1 = client.loadKsys([{ name: "a", source: "src" }]);
       const p2 = client.parse("a", new Uint8Array());
       client.terminate();
       await expect(p1).rejects.toThrow(/terminated/);
@@ -168,7 +167,9 @@ describe("EvalClient", () => {
     it("rejects new requests after terminate", async () => {
       const { client } = makeClient();
       client.terminate();
-      await expect(client.loadKsy("a", "src")).rejects.toThrow(/terminated/);
+      await expect(
+        client.loadKsys([{ name: "a", source: "src" }]),
+      ).rejects.toThrow(/terminated/);
     });
 
     it("is idempotent", () => {
@@ -182,9 +183,9 @@ describe("EvalClient", () => {
   describe("id allocation", () => {
     it("assigns monotonically increasing ids", () => {
       const { client, worker } = makeClient();
-      void client.loadKsy("a", "");
-      void client.loadKsy("b", "");
-      void client.loadKsy("c", "");
+      void client.loadKsys([{ name: "a", source: "" }]);
+      void client.loadKsys([{ name: "b", source: "" }]);
+      void client.loadKsys([{ name: "c", source: "" }]);
       expect(worker.sent.map((m) => m.id)).toEqual([1, 2, 3]);
     });
   });

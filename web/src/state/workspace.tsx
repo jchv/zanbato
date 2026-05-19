@@ -20,12 +20,8 @@ import {
 import { createLogger } from "../log";
 import { EvalClient, type WorkerFactory } from "../rpc/evalClient";
 import type { VFS } from "../vfs/types";
-import {
-  type Project,
-  collectKsyFiles,
-  ksyDisplayName,
-  ksyPathToImportName,
-} from "./project";
+import { collectImportGraph } from "./importGraph";
+import { type Project, ksyDisplayName, ksyPathToImportName } from "./project";
 
 const log = createLogger("workspace");
 
@@ -228,16 +224,14 @@ export function WorkspaceProvider({
           await client.ready();
           if (cancelled) return;
 
-          // Sync the VFS to the worker. Importing KSY files reference
-          // each other by name, so we always push every KSY in the
-          // project; redundant updates are cheap on the in-memory side.
-          const ksyFiles = await collectKsyFiles(vfs);
+          // Walk the import graph from the current KSY and push just
+          // that subset to the worker.
+          const files = await collectImportGraph(currentKsyPath!, vfs);
           if (cancelled) return;
-          for (const f of ksyFiles) {
-            const name = ksyPathToImportName(f.path);
-            await client.loadKsy(name, f.source);
-            if (cancelled) return;
-          }
+          await client.loadKsys(
+            files.map((f) => ({ name: f.importName, source: f.source })),
+          );
+          if (cancelled) return;
 
           const rootName = ksyPathToImportName(currentKsyPath!);
           const bytes = buffer.toBytes();

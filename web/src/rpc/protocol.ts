@@ -1,7 +1,13 @@
-export interface LoadKsyRequest {
-  type: "loadKsy";
+export interface KsyFile {
+  /** Slash-separated import name without `.ksy` extension, e.g. "foo" or
+   *  "sub/bar". */
   name: string;
   source: string;
+}
+
+export interface LoadKsysRequest {
+  type: "loadKsys";
+  files: KsyFile[];
 }
 
 export interface ParseRequest {
@@ -10,11 +16,7 @@ export interface ParseRequest {
   data: Uint8Array;
 }
 
-export interface ClearVfsRequest {
-  type: "clearVfs";
-}
-
-export type EvalRequest = LoadKsyRequest | ParseRequest | ClearVfsRequest;
+export type EvalRequest = LoadKsysRequest | ParseRequest;
 
 export type EvalResponse =
   | { ok: true; tree?: string }

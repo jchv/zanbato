@@ -5,12 +5,13 @@ import * as vm from "node:vm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 interface ZanbatoAPI {
-  loadKsy: (name: string, source: string) => { ok: boolean; error?: string };
+  loadKsys: (
+    files: Array<{ name: string; source: string }>,
+  ) => { ok: boolean; error?: string };
   parse: (
     rootName: string,
     data: Uint8Array,
   ) => { ok: boolean; tree?: string; error?: string };
-  clearVfs: () => { ok: boolean };
 }
 
 declare global {
@@ -50,7 +51,6 @@ const haveWasm = fs.existsSync(wasmPath);
 
   it("round-trips a trivial KSY -> binary -> tree", () => {
     const api = globalThis.zanbato!;
-    api.clearVfs();
 
     const ksy = [
       "meta:",
@@ -62,7 +62,7 @@ const haveWasm = fs.existsSync(wasmPath);
       "    type: u2le",
       "",
     ].join("\n");
-    const loaded = api.loadKsy("smoke", ksy);
+    const loaded = api.loadKsys([{ name: "smoke", source: ksy }]);
     expect(loaded).toEqual({ ok: true });
 
     const parsed = api.parse("smoke", new Uint8Array([0x2a, 0x34, 0x12]));
@@ -80,7 +80,7 @@ const haveWasm = fs.existsSync(wasmPath);
 
   it("returns an error result for an unloaded root name", () => {
     const api = globalThis.zanbato!;
-    api.clearVfs();
+    api.loadKsys([]);
     const parsed = api.parse("does_not_exist", new Uint8Array([0]));
     expect(parsed.ok).toBe(false);
     expect(parsed.error).toBeTruthy();
@@ -88,7 +88,6 @@ const haveWasm = fs.existsSync(wasmPath);
 
   it("parses the app's seed KSY + binary (regression for the frontend)", () => {
     const api = globalThis.zanbato!;
-    api.clearVfs();
     const ksy = [
       "meta:",
       "  id: smoke",
@@ -103,7 +102,7 @@ const haveWasm = fs.existsSync(wasmPath);
       "    repeat-expr: count",
       "",
     ].join("\n");
-    expect(api.loadKsy("smoke", ksy)).toEqual({ ok: true });
+    expect(api.loadKsys([{ name: "smoke", source: ksy }])).toEqual({ ok: true });
 
     const parsed = api.parse(
       "smoke",
@@ -122,15 +121,89 @@ const haveWasm = fs.existsSync(wasmPath);
     expect(tree.children[2].range).toEqual({ startIndex: 4, endIndex: 8 });
   });
 
-  it("can reload a KSY by name (VFS replace)", () => {
+  it("replaces the VFS atomically on each loadKsys call", () => {
     const api = globalThis.zanbato!;
-    api.clearVfs();
-    api.loadKsy("v", "meta: {id: v}\nseq:\n  - {id: a, type: u1}\n");
+    api.loadKsys([
+      { name: "v", source: "meta: {id: v}\nseq:\n  - {id: a, type: u1}\n" },
+    ]);
     const p1 = api.parse("v", new Uint8Array([1]));
     expect(JSON.parse(p1.tree!).children[0].name).toBe("a");
 
-    api.loadKsy("v", "meta: {id: v}\nseq:\n  - {id: b, type: u1}\n");
+    api.loadKsys([
+      { name: "v", source: "meta: {id: v}\nseq:\n  - {id: b, type: u1}\n" },
+    ]);
     const p2 = api.parse("v", new Uint8Array([2]));
     expect(JSON.parse(p2.tree!).children[0].name).toBe("b");
+  });
+
+  it("resolves absolute imports against the VFS root", () => {
+    const api = globalThis.zanbato!;
+    const vfat = [
+      "meta:",
+      "  id: vfat",
+      "  imports:",
+      "    - /common/dos_datetime",
+      "seq:",
+      "  - id: t",
+      "    type: dos_datetime",
+      "",
+    ].join("\n");
+    const dosDatetime = [
+      "meta:",
+      "  id: dos_datetime",
+      "seq:",
+      "  - id: stamp",
+      "    type: u2le",
+      "",
+    ].join("\n");
+    expect(
+      api.loadKsys([
+        { name: "filesystem/vfat", source: vfat },
+        { name: "common/dos_datetime", source: dosDatetime },
+      ]),
+    ).toEqual({ ok: true });
+
+    const parsed = api.parse("filesystem/vfat", new Uint8Array([0x21, 0x43]));
+    expect(parsed.ok).toBe(true);
+    expect(parsed.error).toBeUndefined();
+    const tree = JSON.parse(parsed.tree!);
+    expect(tree.children[0].children[0].name).toBe("stamp");
+    expect(tree.children[0].children[0].value).toBe(0x4321);
+  });
+
+  it("resolves imports across the supplied set", () => {
+    const api = globalThis.zanbato!;
+    const main = [
+      "meta:",
+      "  id: main",
+      "  imports:",
+      "    - helpers/leaf",
+      "seq:",
+      "  - id: x",
+      "    type: leaf",
+      "",
+    ].join("\n");
+    const leaf = [
+      "meta:",
+      "  id: leaf",
+      "seq:",
+      "  - id: n",
+      "    type: u1",
+      "",
+    ].join("\n");
+    expect(
+      api.loadKsys([
+        { name: "main", source: main },
+        { name: "helpers/leaf", source: leaf },
+      ]),
+    ).toEqual({ ok: true });
+
+    const parsed = api.parse("main", new Uint8Array([0x05]));
+    expect(parsed.ok).toBe(true);
+    expect(parsed.error).toBeUndefined();
+    const tree = JSON.parse(parsed.tree!);
+    expect(tree.children[0].name).toBe("x");
+    expect(tree.children[0].children[0].name).toBe("n");
+    expect(tree.children[0].children[0].value).toBe(5);
   });
 });
