@@ -422,6 +422,8 @@ func evalUnary(context *EvalContext, node expr.UnaryNode) (*ExprValue, error) {
 		return evalLogicalNot(operand)
 	case expr.OpNegate:
 		return evalNegate(operand)
+	case expr.OpInvert:
+		return evalInvert(operand)
 	}
 	return nil, fmt.Errorf("unhandled unary op: %s", node.Op.String())
 }
@@ -519,6 +521,15 @@ func evalNegate(operand *ExprValue) (*ExprValue, error) {
 		return NewFloatLiteralValue(result.Neg(operand.Float.Value)), nil
 	}
 	return nil, fmt.Errorf("unhandled unary negate operand types: %s", operand.Kind)
+}
+
+func evalInvert(operand *ExprValue) (*ExprValue, error) {
+	switch operand.Kind {
+	case IntegerKind:
+		var result big.Int
+		return NewIntegerLiteralValue(result.Not(operand.Integer.Value)), nil
+	}
+	return nil, fmt.Errorf("unhandled unary invert operand types: %s", operand.Kind)
 }
 
 func evalBinary(context *EvalContext, node expr.BinaryNode) (*ExprValue, error) {

@@ -821,6 +821,8 @@ func (e *Emitter) exprNode(node expr.Node) string {
 			return "!(" + e.exprNode(t.Operand) + ")"
 		case expr.OpNegate:
 			return "-(" + e.exprNode(t.Operand) + ")"
+		case expr.OpInvert:
+			return "^(int(" + e.exprNode(t.Operand) + "))"
 		default:
 			panic(fmt.Errorf("unsupported unary op node %s", t.Op))
 		}

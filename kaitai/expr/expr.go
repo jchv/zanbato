@@ -18,7 +18,8 @@ const (
 	InvalidUnaryOp UnaryOp = iota
 
 	OpLogicalNot
-	OpNegate // Unary minus: -x
+	OpNegate
+	OpInvert
 )
 
 type BinaryOp int
@@ -205,6 +206,8 @@ func (u UnaryNode) String() string {
 		return "not (" + u.Operand.String() + ")"
 	case OpNegate:
 		return "-(" + u.Operand.String() + ")"
+	case OpInvert:
+		return "~(" + u.Operand.String() + ")"
 	default:
 		return u.Op.String() + " (" + u.Operand.String() + ")"
 	}
@@ -739,10 +742,13 @@ func (p *parser) expr(depth int) Node {
 	case c == '[':
 		n = p.arraylit()
 	case c == '-':
-		// Unary negation
 		p.advance(1)
 		operand := p.expr(depthMemberExpr)
 		n = UnaryNode{Op: OpNegate, Operand: operand}
+	case c == '~':
+		p.advance(1)
+		operand := p.expr(depthMemberExpr)
+		n = UnaryNode{Op: OpInvert, Operand: operand}
 	default:
 		panic(fmt.Errorf("expected primary expression"))
 	}

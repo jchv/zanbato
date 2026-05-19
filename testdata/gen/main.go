@@ -88,6 +88,7 @@ func main() {
 		{"zb_expr_precedence.bin", genExprPrecedence},
 		{"zb_unary_minus_prec.bin", genUnaryMinusPrec},
 		{"zb_not_prec.bin", genNotPrec},
+		{"zb_expr_invert.bin", genExprInvert},
 
 		// Coverage gap tests
 		{"zb_nav_any_typed.bin", genNavAnyTyped},
@@ -497,6 +498,14 @@ func genUnaryMinusPrec() []byte {
 // operators. `not a == b` must parse as `not (a == b)`.
 func genNotPrec() []byte {
 	return []byte{0x05, 0x03}
+}
+
+// genExprInvert: val=100(u4le); exercises the unary `~` (bitwise invert)
+// operator, supported upstream but currently unimplemented in Zanbato.
+func genExprInvert() []byte {
+	buf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(buf[0:4], 100)
+	return buf
 }
 
 // === Coverage Gap Tests ===

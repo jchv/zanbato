@@ -1,0 +1,17 @@
+id: zb_expr_invert
+data: zb_expr_invert.bin
+asserts:
+  - actual: val
+    expected: 100
+  # ~100 = -101
+  - actual: inv_val
+    expected: -101
+  # ~7 = -8
+  - actual: inv_lit
+    expected: -8
+  # ~7 + 3 parses as (~7) + 3 = -8 + 3 = -5
+  - actual: inv_plus
+    expected: -5
+  # ~(7 + 3) = ~10 = -11
+  - actual: inv_paren
+    expected: -11

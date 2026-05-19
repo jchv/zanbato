@@ -11,11 +11,12 @@ func _() {
 	_ = x[InvalidUnaryOp-0]
 	_ = x[OpLogicalNot-1]
 	_ = x[OpNegate-2]
+	_ = x[OpInvert-3]
 }
 
-const _UnaryOp_name = "InvalidUnaryOpOpLogicalNotOpNegate"
+const _UnaryOp_name = "InvalidUnaryOpOpLogicalNotOpNegateOpInvert"
 
-var _UnaryOp_index = [...]uint8{0, 14, 26, 34}
+var _UnaryOp_index = [...]uint8{0, 14, 26, 34, 42}
 
 func (i UnaryOp) String() string {
 	idx := int(i) - 0

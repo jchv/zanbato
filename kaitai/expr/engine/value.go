@@ -143,6 +143,9 @@ func ResultTypeOfNode(context *Context, node expr.Node) *ExprValue {
 		return val.Child(node.Property)
 
 	case expr.UnaryNode:
+		if node.Op == expr.OpInvert {
+			return NewIntegerLiteralValue(big.NewInt(0))
+		}
 		return ResultTypeOfNode(context, node.Operand)
 
 	case expr.BinaryNode:

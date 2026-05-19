@@ -744,7 +744,8 @@ func (g *kstGen) translateExpected(node expr.Node) string {
 		return g.translateExpected(n.Operand)
 
 	case expr.UnaryNode:
-		if n.Op == expr.OpNegate {
+		switch n.Op {
+		case expr.OpNegate:
 			// Special case: -BigInt that fits in int64 (e.g. math.MinInt64)
 			if intNode, ok := n.Operand.(expr.IntNode); ok {
 				negated := new(big.Int).Neg(intNode.Integer)
@@ -759,6 +760,8 @@ func (g *kstGen) translateExpected(node expr.Node) string {
 				}
 			}
 			return "-" + g.translateExpected(n.Operand)
+		case expr.OpInvert:
+			return "^" + g.translateExpected(n.Operand)
 		}
 		return "!" + g.translateExpected(n.Operand)
 
