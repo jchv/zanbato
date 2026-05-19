@@ -703,7 +703,7 @@ func (p *parser) expr(depth int) Node {
 			}
 			n = IdentNode{Identifier: tok}
 		case "not":
-			n = UnaryNode{Op: OpLogicalNot, Operand: p.expr(depthMemberExpr)}
+			n = UnaryNode{Op: OpLogicalNot, Operand: p.expr(depthCompareExpr)}
 		case "true":
 			n = BoolNode{Bool: true}
 		case "false":

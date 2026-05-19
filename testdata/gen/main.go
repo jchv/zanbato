@@ -87,6 +87,7 @@ func main() {
 		{"zb_expr_str_to_i.bin", genExprStrToI},
 		{"zb_expr_precedence.bin", genExprPrecedence},
 		{"zb_unary_minus_prec.bin", genUnaryMinusPrec},
+		{"zb_not_prec.bin", genNotPrec},
 
 		// Coverage gap tests
 		{"zb_nav_any_typed.bin", genNavAnyTyped},
@@ -490,6 +491,12 @@ func genUnaryMinusPrec() []byte {
 	buf := make([]byte, 4)
 	binary.LittleEndian.PutUint32(buf[0:4], 100)
 	return buf
+}
+
+// genNotPrec: a=5(u1), b=3(u1); exercises `not` precedence vs comparison
+// operators. `not a == b` must parse as `not (a == b)`.
+func genNotPrec() []byte {
+	return []byte{0x05, 0x03}
 }
 
 // === Coverage Gap Tests ===

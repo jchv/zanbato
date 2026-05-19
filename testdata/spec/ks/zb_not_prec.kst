@@ -1,0 +1,13 @@
+id: zb_not_prec
+data: zb_not_prec.bin
+asserts:
+  - actual: a
+    expected: 5
+  - actual: b
+    expected: 3
+  # not a == b  -> upstream: not (a == b) = not (5 == 3) = not false = true
+  - actual: not_eq_int
+    expected: true
+  # not a < b   -> upstream: not (a < b) = not (5 < 3) = not false = true
+  - actual: not_lt_int
+    expected: true
