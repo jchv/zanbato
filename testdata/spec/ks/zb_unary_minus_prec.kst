@@ -1,0 +1,7 @@
+id: zb_unary_minus_prec
+data: zb_unary_minus_prec.bin
+asserts:
+  - actual: val
+    expected: 100
+  - actual: neg_to_s_len
+    expected: -3

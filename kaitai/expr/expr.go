@@ -741,7 +741,7 @@ func (p *parser) expr(depth int) Node {
 	case c == '-':
 		// Unary negation
 		p.advance(1)
-		operand := p.expr(depthPrimaryExpr)
+		operand := p.expr(depthMemberExpr)
 		n = UnaryNode{Op: OpNegate, Operand: operand}
 	default:
 		panic(fmt.Errorf("expected primary expression"))

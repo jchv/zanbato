@@ -79,6 +79,10 @@ func TestParseExprPrecedence(t *testing.T) {
 		{"a + b * c", "(a) + ((b) * (c))"},
 		{"a - b - c", "((a) - (b)) - (c)"},
 		{"a << b << c", "((a) << (b)) << (c)"},
+		{"-a.foo", "-(a.foo)"},
+		{"-a.b.c", "-(a.b.c)"},
+		{"-a * b", "(-(a)) * (b)"},
+		{"-a + b.c", "(-(a)) + (b.c)"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.Source, func(t *testing.T) {

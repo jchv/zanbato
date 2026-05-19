@@ -86,6 +86,7 @@ func main() {
 		{"zb_expr_fstring.bin", genExprFstring},
 		{"zb_expr_str_to_i.bin", genExprStrToI},
 		{"zb_expr_precedence.bin", genExprPrecedence},
+		{"zb_unary_minus_prec.bin", genUnaryMinusPrec},
 
 		// Coverage gap tests
 		{"zb_nav_any_typed.bin", genNavAnyTyped},
@@ -481,6 +482,14 @@ func genExprStrToI() []byte {
 // instance expressions, not field data.
 func genExprPrecedence() []byte {
 	return []byte{0x00}
+}
+
+// genUnaryMinusPrec: val=100(u4le); exercises unary-minus vs member-access
+// precedence via `-val.to_s.length`.
+func genUnaryMinusPrec() []byte {
+	buf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(buf[0:4], 100)
+	return buf
 }
 
 // === Coverage Gap Tests ===
