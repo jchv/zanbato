@@ -7,6 +7,11 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/encoding/unicode"
 )
 
 func getBuiltin(builtin BuiltinMethod) MethodFn {
@@ -77,24 +82,67 @@ func builtinMethodByteArrayToString(this *ExprValue, args []*ExprValue) (*ExprVa
 	if this == nil {
 		return nil, errors.New("to_s on nil value")
 	}
+	var data []byte
 	if this.ByteArray != nil {
-		return NewStringLiteralValue(string(this.ByteArray.Value)), nil
-	}
-	// Handle ArrayKind of integers (byte arrays stored as int arrays)
-	if this.Kind == ArrayKind && len(this.Items) > 0 {
-		bs := make([]byte, len(this.Items))
+		data = this.ByteArray.Value
+	} else if this.Kind == ArrayKind {
+		// Handle ArrayKind of integers (byte arrays stored as int arrays)
+		data = make([]byte, len(this.Items))
 		for i, item := range this.Items {
 			if item.Kind == IntegerKind && item.Integer != nil {
-				bs[i] = byte(item.Integer.Value.Int64())
+				data[i] = byte(item.Integer.Value.Int64())
 			}
 		}
-		return NewStringLiteralValue(string(bs)), nil
+	} else {
+		return nil, errors.New("to_s on non-byte-array value")
 	}
-	return nil, errors.New("to_s on non-byte-array value")
+
+	enc := ""
+	if len(args) > 0 && args[0] != nil && args[0].Kind == StringKind && args[0].String != nil {
+		enc = args[0].String.Value
+	}
+
+	return NewStringLiteralValue(decodeString(data, enc)), nil
+}
+
+func getEncoding(name string) encoding.Encoding {
+	normalized := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(name, "-", ""), "_", ""))
+	switch normalized {
+	case "UTF8", "":
+		return nil // UTF-8 is native, no decoding needed
+	case "ASCII":
+		return nil // ASCII is a subset of UTF-8
+	case "UTF16LE":
+		return unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM)
+	case "UTF16BE":
+		return unicode.UTF16(unicode.BigEndian, unicode.IgnoreBOM)
+	case "SHIFTJIS", "SJIS":
+		return japanese.ShiftJIS
+	case "IBM437", "CP437":
+		return charmap.CodePage437
+	case "ISO88591", "LATIN1":
+		return charmap.ISO8859_1
+	case "WINDOWS1252", "CP1252":
+		return charmap.Windows1252
+	default:
+		return nil // unknown encoding, treat as raw bytes
+	}
+}
+
+func decodeString(data []byte, enc string) string {
+	e := getEncoding(enc)
+	if e == nil {
+		return string(data) // UTF-8 or unknown
+	}
+	decoded, err := e.NewDecoder().Bytes(data)
+	if err != nil {
+		return string(data) // fallback to raw
+	}
+	return string(decoded)
 }
 
 func builtinMethodStringLength(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
-	return NewIntegerLiteralValue(big.NewInt(int64(len(this.String.Value)))), nil
+	return NewIntegerLiteralValue(big.NewInt(int64(utf8.RuneCountInString(this.String.Value)))), nil
 }
 
 func builtinMethodStringReverse(this *ExprValue, args []*ExprValue) (*ExprValue, error) {
@@ -113,19 +161,19 @@ func builtinMethodStringSubstring(this *ExprValue, args []*ExprValue) (*ExprValu
 	if len(args) < 2 {
 		return nil, errors.New("substring requires 2 arguments")
 	}
-	s := this.String.Value
+	runes := []rune(this.String.Value)
 	from := int(args[0].Integer.Value.Int64())
 	to := int(args[1].Integer.Value.Int64())
 	if from < 0 {
 		from = 0
 	}
-	if to > len(s) {
-		to = len(s)
+	if to > len(runes) {
+		to = len(runes)
 	}
 	if from > to {
 		from = to
 	}
-	return NewStringLiteralValue(s[from:to]), nil
+	return NewStringLiteralValue(string(runes[from:to])), nil
 }
 
 func builtinMethodStringToInt(this *ExprValue, args []*ExprValue) (*ExprValue, error) {

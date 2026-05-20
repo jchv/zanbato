@@ -75,6 +75,7 @@ func main() {
 		// String tests
 		{"zb_str_encodings.bin", genStrEncodings},
 		{"zb_str_term_pad.bin", genStrTermPad},
+		{"zb_expr_utf8.bin", genExprUtf8},
 
 		// Navigation tests
 		{"zb_nav_parent_chain.bin", genNavParentChain},
@@ -601,4 +602,11 @@ func genRepeatIndex() []byte {
 // genValidInEnum: val=99(u1) - not a valid enum member
 func genValidInEnum() []byte {
 	return []byte{99}
+}
+
+// genExprUtf8: "a世界b\0" (9 bytes) + "a世界bcd" in UTF-16LE (12 bytes)
+func genExprUtf8() []byte {
+	utf8Part := []byte("a\xe4\xb8\x96\xe7\x95\x8cb\x00")
+	utf16Part := []byte("\x61\x00\x16\x4e\x4c\x75\x62\x00\x63\x00\x64\x00")
+	return append(utf8Part, utf16Part...)
 }

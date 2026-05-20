@@ -1,0 +1,9 @@
+id: zb_expr_utf8
+data: zb_expr_utf8.bin
+asserts:
+  - actual: str_len
+    expected: 4
+  - actual: str_sub
+    expected: '"世界"'
+  - actual: str_utf16le
+    expected: '"a世界bcd"'
