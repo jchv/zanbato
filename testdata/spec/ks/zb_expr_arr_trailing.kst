@@ -1,0 +1,7 @@
+id: zb_expr_arr_trailing
+data: zb_expr_arr_trailing.bin
+asserts:
+  - actual: arr_len
+    expected: 3
+  - actual: arr_last
+    expected: 3

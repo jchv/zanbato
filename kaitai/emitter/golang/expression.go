@@ -1202,35 +1202,28 @@ func (e *Emitter) exprNode(node expr.Node) string {
 		}
 		return fmt.Sprintf("(%s).(*%s)", operand, goType)
 	case expr.SizeofNode:
-		// sizeof<type> - compute the fixed byte size of a type at compile time
-		typeName := t.TypeName
-		// Handle :: scope separator
-		if strings.Contains(typeName, "::") {
-			parts := strings.Split(typeName, "::")
-			var resolved *engine.ExprValue
-			for i, part := range parts {
-				if i == 0 {
-					resolved, _ = e.context.ResolveType(part)
-				} else if resolved != nil {
-					resolved = resolved.TypeChild(part)
-				}
-			}
-			if resolved != nil && resolved.Kind == engine.StructKind && resolved.Struct != nil {
-				sz := e.computeStructSize(resolved.Struct.Type)
-				if sz >= 0 {
-					return fmt.Sprintf("%d", sz)
-				}
-			}
-		} else {
-			resolved, _ := e.context.ResolveType(typeName)
-			if resolved != nil && resolved.Kind == engine.StructKind && resolved.Struct != nil {
-				sz := e.computeStructSize(resolved.Struct.Type)
-				if sz >= 0 {
-					return fmt.Sprintf("%d", sz)
-				}
+		// sizeof<type> - compute the fixed byte size of a type at compile time,
+		// rounded up from its bit size for types that are not byte-aligned.
+		if bits, ok := engine.PrimitiveBitSize(t.TypeName); ok {
+			return fmt.Sprintf("%d", (bits+7)/8)
+		}
+		if resolved := e.resolveQualifiedType(t.TypeName); resolved != nil {
+			if bits := e.computeStructBitSize(resolved.Struct.Type); bits >= 0 {
+				return fmt.Sprintf("%d", (bits+7)/8)
 			}
 		}
 		panic(fmt.Errorf("sizeof<%s>: unable to compute size", t.TypeName))
+	case expr.BitSizeofNode:
+		// bitsizeof<type> - compute the fixed bit size of a type at compile time
+		if bits, ok := engine.PrimitiveBitSize(t.TypeName); ok {
+			return fmt.Sprintf("%d", bits)
+		}
+		if resolved := e.resolveQualifiedType(t.TypeName); resolved != nil {
+			if bits := e.computeStructBitSize(resolved.Struct.Type); bits >= 0 {
+				return fmt.Sprintf("%d", bits)
+			}
+		}
+		panic(fmt.Errorf("bitsizeof<%s>: unable to compute size", t.TypeName))
 	case expr.FStringNode:
 		// f-string: concatenate literal parts with fmt.Sprintf for interpolated expressions
 		if len(t.Parts) == 0 {

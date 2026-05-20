@@ -1,0 +1,19 @@
+id: zb_expr_bitsizeof
+data: zb_expr_bitsizeof.bin
+asserts:
+  - actual: bitsizeof_u1
+    expected: 8
+  - actual: bitsizeof_u4
+    expected: 32
+  - actual: bitsizeof_inner
+    expected: 16
+  - actual: bitsizeof_b1
+    expected: 1
+  - actual: bitsizeof_b3
+    expected: 3
+  - actual: bitsizeof_b16
+    expected: 16
+  - actual: bitsizeof_bit_aligned
+    expected: 8
+  - actual: bitsizeof_bit_unaligned
+    expected: 7

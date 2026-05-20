@@ -834,6 +834,74 @@ func (e *Emitter) tryResolveUserTypeSize(name string) (sz int) {
 	return
 }
 
+func (e *Emitter) computeStructBitSize(s *kaitai.Struct) int {
+	total := 0
+	for _, attr := range s.Seq {
+		if attr.Repeat != nil {
+			return -1
+		}
+		ref := attr.Type.TypeRef
+		if ref == nil {
+			return -1
+		}
+		bits := -1
+		if ref.Kind == types.Bits && ref.Bits != nil {
+			bits = ref.Bits.Width
+		} else if sz := computeAttrSize(attr); sz >= 0 {
+			bits = sz * 8
+		} else if ref.Kind == types.User {
+			childName := ref.User.Name
+			for _, child := range s.Structs {
+				if string(child.ID) == childName {
+					bits = e.computeStructBitSize(child)
+					break
+				}
+			}
+			if bits < 0 {
+				bits = e.tryResolveUserTypeBitSize(childName)
+			}
+		}
+		if bits < 0 {
+			return -1
+		}
+		total += bits
+	}
+	return total
+}
+
+func (e *Emitter) resolveQualifiedType(name string) *engine.ExprValue {
+	var resolved *engine.ExprValue
+	if strings.Contains(name, "::") {
+		for i, part := range strings.Split(name, "::") {
+			if i == 0 {
+				resolved, _ = e.context.ResolveType(part)
+			} else if resolved != nil {
+				resolved = resolved.TypeChild(part)
+			}
+		}
+	} else {
+		resolved, _ = e.context.ResolveType(name)
+	}
+	if resolved == nil || resolved.Kind != engine.StructKind || resolved.Struct == nil {
+		return nil
+	}
+	return resolved
+}
+
+func (e *Emitter) tryResolveUserTypeBitSize(name string) (bits int) {
+	bits = -1
+	defer func() {
+		if r := recover(); r != nil {
+			bits = -1
+		}
+	}()
+	resolved := e.resolveType(name)
+	if resolved.Kind == engine.StructKind && resolved.Struct != nil {
+		bits = e.computeStructBitSize(resolved.Struct.Type)
+	}
+	return
+}
+
 // parentGoType returns the Go type string for a struct's Parent_ field.
 // Returns "" if the parent should be 'any'.
 func (e *Emitter) parentGoType(ks *kaitai.Struct) string {

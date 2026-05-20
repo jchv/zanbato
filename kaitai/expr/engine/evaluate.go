@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 
 	"github.com/jchv/zanbato/kaitai"
@@ -376,7 +377,11 @@ func evalNode(context *EvalContext, node expr.Node) (*ExprValue, error) {
 		return NewStringLiteralValue(result.String()), nil
 
 	case expr.SizeofNode:
-		// sizeof<type> returns the byte size of a type
+		// sizeof<type> returns the byte size of a type, rounded up from its
+		// bit size for types that are not byte-aligned.
+		if bits, ok := PrimitiveBitSize(node.TypeName); ok {
+			return NewIntegerLiteralValue(big.NewInt((bits + 7) / 8)), nil
+		}
 		// Handle nested type paths like "block::subblock"
 		parts := strings.Split(node.TypeName, "::")
 		var typ *ExprValue
@@ -388,12 +393,32 @@ func evalNode(context *EvalContext, node expr.Node) (*ExprValue, error) {
 			}
 		}
 		if typ != nil && typ.Kind == StructKind && typ.Struct != nil && typ.Struct.Type != nil {
-			size := ComputeStructSize(typ.Struct.Type)
-			if size >= 0 {
-				return NewIntegerLiteralValue(big.NewInt(size)), nil
+			if bits := ComputeStructBitSize(typ.Struct.Type); bits >= 0 {
+				return NewIntegerLiteralValue(big.NewInt((bits + 7) / 8)), nil
 			}
 		}
 		return NewIntegerLiteralValue(big.NewInt(0)), nil
+
+	case expr.BitSizeofNode:
+		// bitsizeof<type> returns the size of the named type in bits.
+		if bits, ok := PrimitiveBitSize(node.TypeName); ok {
+			return NewIntegerLiteralValue(big.NewInt(bits)), nil
+		}
+		parts := strings.Split(node.TypeName, "::")
+		var typ *ExprValue
+		for i, part := range parts {
+			if i == 0 {
+				typ, _ = context.ResolveType(part)
+			} else if typ != nil {
+				typ = typ.TypeChild(part)
+			}
+		}
+		if typ != nil && typ.Kind == StructKind && typ.Struct != nil && typ.Struct.Type != nil {
+			if bits := ComputeStructBitSize(typ.Struct.Type); bits >= 0 {
+				return NewIntegerLiteralValue(big.NewInt(bits)), nil
+			}
+		}
+		return nil, fmt.Errorf("bitsizeof<%s>: unable to compute size", node.TypeName)
 
 	case expr.UnaryNode:
 		return evalUnary(context, node)
@@ -501,6 +526,75 @@ func computeTypeRefSize(ref *types.TypeRef) int64 {
 	default:
 		return -1
 	}
+}
+
+// PrimitiveBitSize returns the bit width of a built-in scalar type referenced
+// by name (e.g. `u4`, `s2le`, `f8`, `b3`). Returns (0, false) for non-scalar
+// or unrecognized names.
+func PrimitiveBitSize(name string) (int64, bool) {
+	switch name {
+	case "u1", "s1":
+		return 8, true
+	case "u2", "u2le", "u2be", "s2", "s2le", "s2be":
+		return 16, true
+	case "u4", "u4le", "u4be", "s4", "s4le", "s4be", "f4", "f4le", "f4be":
+		return 32, true
+	case "u8", "u8le", "u8be", "s8", "s8le", "s8be", "f8", "f8le", "f8be":
+		return 64, true
+	}
+	if len(name) > 1 && name[0] == 'b' {
+		n, err := strconv.Atoi(name[1:])
+		if err == nil && n > 0 {
+			return int64(n), true
+		}
+	}
+	return 0, false
+}
+
+// ComputeStructBitSize returns the static bit size of a struct or -1 if the
+// size cannot be derived statically.
+func ComputeStructBitSize(s *kaitai.Struct) int64 {
+	return computeStructBitSizeHelper(s, 0)
+}
+
+func computeStructBitSizeHelper(s *kaitai.Struct, depth int) int64 {
+	if depth > 10 {
+		return -1
+	}
+	var total int64
+	for _, attr := range s.Seq {
+		if attr.Repeat != nil || attr.If != nil {
+			return -1
+		}
+		ref := attr.Type.TypeRef
+		if ref == nil {
+			return -1
+		}
+		bits := computeTypeRefBitSize(ref)
+		if bits < 0 && ref.Kind == types.User {
+			for _, child := range s.Structs {
+				if string(child.ID) == ref.User.Name {
+					bits = computeStructBitSizeHelper(child, depth+1)
+					break
+				}
+			}
+		}
+		if bits < 0 {
+			return -1
+		}
+		total += bits
+	}
+	return total
+}
+
+func computeTypeRefBitSize(ref *types.TypeRef) int64 {
+	if ref.Kind == types.Bits && ref.Bits != nil {
+		return int64(ref.Bits.Width)
+	}
+	if byteSize := computeTypeRefSize(ref); byteSize >= 0 {
+		return byteSize * 8
+	}
+	return -1
 }
 
 func evalLogicalNot(operand *ExprValue) (*ExprValue, error) {

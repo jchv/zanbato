@@ -85,10 +85,14 @@ func main() {
 		{"zb_expr_sizeof.bin", genExprSizeof},
 		{"zb_expr_fstring.bin", genExprFstring},
 		{"zb_expr_str_to_i.bin", genExprStrToI},
-		{"zb_expr_precedence.bin", genExprPrecedence},
+		{"zb_expr_precedence.bin", genSingleZeroByte},
 		{"zb_unary_minus_prec.bin", genUnaryMinusPrec},
 		{"zb_not_prec.bin", genNotPrec},
 		{"zb_expr_invert.bin", genExprInvert},
+		{"zb_expr_bitsizeof.bin", genSingleZeroByte},
+		{"zb_expr_unary_plus.bin", genSingleZeroByte},
+		{"zb_expr_arr_trailing.bin", genSingleZeroByte},
+		{"zb_expr_str_concat.bin", genSingleZeroByte},
 
 		// Coverage gap tests
 		{"zb_nav_any_typed.bin", genNavAnyTyped},
@@ -480,12 +484,6 @@ func genExprStrToI() []byte {
 	return []byte{'4', '2', 0x00, 0x00}
 }
 
-// genExprPrecedence: single dummy byte; the test exercises constant-folded
-// instance expressions, not field data.
-func genExprPrecedence() []byte {
-	return []byte{0x00}
-}
-
 // genUnaryMinusPrec: val=100(u4le); exercises unary-minus vs member-access
 // precedence via `-val.to_s.length`.
 func genUnaryMinusPrec() []byte {
@@ -506,6 +504,13 @@ func genExprInvert() []byte {
 	buf := make([]byte, 4)
 	binary.LittleEndian.PutUint32(buf[0:4], 100)
 	return buf
+}
+
+// genSingleZeroByte produces a single 0x00 byte for tests that only need
+// a parseable placeholder in `seq` so they can exercise expression-only
+// instances.
+func genSingleZeroByte() []byte {
+	return []byte{0x00}
 }
 
 // === Coverage Gap Tests ===

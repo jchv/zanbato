@@ -192,6 +192,18 @@ func (s SizeofNode) String() string {
 	return "sizeof<" + s.TypeName + ">"
 }
 
+// BitSizeofNode is a bitsizeof expression (e.g., bitsizeof<type>) that
+// returns the size of the named type in bits.
+type BitSizeofNode struct {
+	TypeName string
+}
+
+func (BitSizeofNode) isnode() {}
+
+func (s BitSizeofNode) String() string {
+	return "bitsizeof<" + s.TypeName + ">"
+}
+
 // UnaryNode is a unary operation
 type UnaryNode struct {
 	Operand Node
@@ -655,6 +667,12 @@ func (p *parser) arraylit() Node {
 		switch p.peek() {
 		case ',':
 			p.advance(1)
+			p.skipwhitespace()
+			if p.peek() == ']' {
+				// Allow a trailing comma before the closing bracket.
+				p.advance(1)
+				return an
+			}
 			an.Items = append(an.Items, p.expr(0))
 		case ']':
 			p.advance(1)
@@ -711,8 +729,8 @@ func (p *parser) expr(depth int) Node {
 			n = BoolNode{Bool: true}
 		case "false":
 			n = BoolNode{Bool: false}
-		case "sizeof":
-			// sizeof<type> syntax
+		case "sizeof", "bitsizeof":
+			// sizeof<type> / bitsizeof<type> syntax
 			if p.peek() == '<' {
 				p.advance(1)
 				typeName := ""
@@ -722,7 +740,11 @@ func (p *parser) expr(depth int) Node {
 				if p.next() != '>' {
 					panic(fmt.Errorf("expected '>'"))
 				}
-				n = SizeofNode{TypeName: typeName}
+				if tok == "bitsizeof" {
+					n = BitSizeofNode{TypeName: typeName}
+				} else {
+					n = SizeofNode{TypeName: typeName}
+				}
 			} else {
 				n = IdentNode{Identifier: tok}
 			}
@@ -732,7 +754,22 @@ func (p *parser) expr(depth int) Node {
 	case isnumber(c):
 		n = p.number()
 	case c == '"' || c == '\'':
-		n = p.strlit()
+		first := p.strlit().(StringNode)
+		combined := first.Str
+		for {
+			save := p.pos
+			saveS := p.s
+			p.skipwhitespace()
+			// TODO: can fstrings concat like this?
+			if q := p.peek(); q != '"' && q != '\'' {
+				p.s = saveS
+				p.pos = save
+				break
+			}
+			next := p.strlit().(StringNode)
+			combined += next.Str
+		}
+		n = StringNode{Str: combined}
 	case c == '(':
 		p.next()
 		n = p.expr(0)
@@ -745,6 +782,9 @@ func (p *parser) expr(depth int) Node {
 		p.advance(1)
 		operand := p.expr(depthMemberExpr)
 		n = UnaryNode{Op: OpNegate, Operand: operand}
+	case c == '+':
+		p.advance(1)
+		n = p.expr(depthMemberExpr)
 	case c == '~':
 		p.advance(1)
 		operand := p.expr(depthMemberExpr)

@@ -1,0 +1,7 @@
+id: zb_expr_unary_plus
+data: zb_expr_unary_plus.bin
+asserts:
+  - actual: plus_lit
+    expected: 5
+  - actual: plus_neg
+    expected: -5

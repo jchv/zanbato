@@ -329,6 +329,10 @@ func ResultTypeOfNode(context *Context, node expr.Node) *ExprValue {
 	case expr.SizeofNode:
 		// sizeof<type> returns an integer
 		return NewIntegerLiteralValue(big.NewInt(0))
+
+	case expr.BitSizeofNode:
+		// bitsizeof<type> returns an integer
+		return NewIntegerLiteralValue(big.NewInt(0))
 	}
 	return nil
 }

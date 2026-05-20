@@ -1,0 +1,5 @@
+id: zb_expr_str_concat
+data: zb_expr_str_concat.bin
+asserts:
+  - actual: joined
+    expected: '"foobar"'
