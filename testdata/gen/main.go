@@ -111,6 +111,10 @@ func main() {
 		{"zb_switch_bytes_case.bin", genSwitchBytesCase},
 		{"zb_repeat_index.bin", genRepeatIndex},
 		{"zb_valid_in_enum.bin", genValidInEnum},
+
+		// Divergence tests
+		{"zb_expr_float_literals.bin", genSingleZeroByte},
+		{"zb_contents_str_array.bin", genContentsStrArray},
 	}
 
 	for _, g := range generators {
@@ -619,4 +623,10 @@ func genExprDivMod64() []byte {
 	binary.LittleEndian.PutUint64(buf[0:8], uVal)
 	binary.LittleEndian.PutUint64(buf[8:16], uint64(sVal))
 	return buf
+}
+
+// genContentsStrArray: matches the `contents:` declaration in
+// zb_contents_str_array.ksy of '0xff', '255', 'abc' and the bare 0xfe int.
+func genContentsStrArray() []byte {
+	return []byte{0xff, 0xff, 0x61, 0x62, 0x63, 0xfe}
 }

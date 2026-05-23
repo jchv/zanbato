@@ -1,0 +1,5 @@
+id: zb_contents_str_array
+data: zb_contents_str_array.bin
+asserts:
+  - actual: header
+    expected: '[0xff, 0xff, 0x61, 0x62, 0x63, 0xfe]'

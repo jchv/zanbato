@@ -40,6 +40,7 @@ var testSources = []struct {
 // Kaitai Struct compatibility mode to run in Zanbato.
 var compatTestIDs = map[string]bool{
 	"zb_expr_div_mod_64": true,
+	"zb_expr_bitwise":    true,
 }
 
 var resolverPaths = []string{

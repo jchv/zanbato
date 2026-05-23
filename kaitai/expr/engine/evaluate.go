@@ -931,7 +931,7 @@ func evalBitAnd(a *ExprValue, b *ExprValue) (*ExprValue, error) {
 	case a.Kind == IntegerKind && b.Kind == IntegerKind:
 		var result big.Int
 		result.And(a.Integer.Value, b.Integer.Value)
-		return newSignedInt32IntegerValue(&result), nil
+		return NewIntegerLiteralValue(&result), nil
 	}
 	return nil, fmt.Errorf("unhandled bitwise and operand types: %s, %s", a.Kind, b.Kind)
 }
@@ -941,7 +941,7 @@ func evalBitOr(a *ExprValue, b *ExprValue) (*ExprValue, error) {
 	case a.Kind == IntegerKind && b.Kind == IntegerKind:
 		var result big.Int
 		result.Or(a.Integer.Value, b.Integer.Value)
-		return newSignedInt32IntegerValue(&result), nil
+		return NewIntegerLiteralValue(&result), nil
 	}
 	return nil, fmt.Errorf("unhandled bitwise or operand types: %s, %s", a.Kind, b.Kind)
 }
@@ -951,7 +951,7 @@ func evalBitXor(a *ExprValue, b *ExprValue) (*ExprValue, error) {
 	case a.Kind == IntegerKind && b.Kind == IntegerKind:
 		var result big.Int
 		result.Xor(a.Integer.Value, b.Integer.Value)
-		return newSignedInt32IntegerValue(&result), nil
+		return NewIntegerLiteralValue(&result), nil
 	}
 	return nil, fmt.Errorf("unhandled bitwise xor operand types: %s, %s", a.Kind, b.Kind)
 }

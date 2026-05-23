@@ -19,6 +19,7 @@ JAVA_RUNTIME_DIR="$REPO_DIR/internal/third_party/kaitai_struct_java_runtime"
 CUSTOM_FORMATS_DIR="$REPO_DIR/testdata/formats"
 CUSTOM_KST_DIR="$REPO_DIR/testdata/spec/ks"
 CUSTOM_SRC_DIR="$REPO_DIR/testdata/src"
+CUSTOM_NEGATIVE_DIR="$REPO_DIR/testdata/negative"
 
 # Temp directory for build artifacts
 WORK_DIR=$(mktemp -d)
@@ -102,7 +103,43 @@ if [ "$COMPILED_COUNT" -ne "$KSY_COUNT" ]; then
 fi
 
 echo ""
-echo "=== Step 3: Build upstream KST translator ==="
+echo "=== Step 3: Verify negative KSY files are rejected by upstream ==="
+NEG_COUNT=0
+if [ -d "$CUSTOM_NEGATIVE_DIR" ]; then
+    NEG_COUNT=$(find "$CUSTOM_NEGATIVE_DIR" -maxdepth 1 -name "*.ksy" 2>/dev/null | wc -l)
+fi
+if [ "$NEG_COUNT" -gt 0 ]; then
+    echo "  Found $NEG_COUNT negative KSY files; each must fail to compile."
+    NEG_OUT="$WORK_DIR/negative-out"
+    NEG_FAILED=0
+    for neg in "$CUSTOM_NEGATIVE_DIR"/*.ksy; do
+        base=$(basename "$neg" .ksy)
+        rm -rf "$NEG_OUT"
+        mkdir -p "$NEG_OUT"
+        if "$COMPILER_BIN" \
+                file \
+                -t java \
+                --outdir "$NEG_OUT" \
+                --import-path "$TESTS_DIR/formats" \
+                --import-path "$TESTS_DIR/formats/ks_path" \
+                --import-path "$CUSTOM_FORMATS_DIR" \
+                --java-package io.kaitai.struct.testformats \
+                "$neg" >"$WORK_DIR/neg.log" 2>&1; then
+            echo "ERROR: upstream compiled $base.ksy successfully; expected failure."
+            cat "$WORK_DIR/neg.log"
+            NEG_FAILED=$((NEG_FAILED + 1))
+        else
+            echo "  $base.ksy: upstream rejected (as expected)"
+        fi
+    done
+    if [ "$NEG_FAILED" -gt 0 ]; then
+        echo "ERROR: $NEG_FAILED negative file(s) were accepted by upstream."
+        exit 1
+    fi
+fi
+
+echo ""
+echo "=== Step 4: Build upstream KST translator ==="
 TRANSLATOR_DIR="$TESTS_DIR/translator"
 # Ensure the compiler is published locally for the translator
 echo "  Publishing compiler locally..."
@@ -111,7 +148,7 @@ echo "  Building translator..."
 (cd "$TRANSLATOR_DIR" && sbt compile 2>&1 | tail -3)
 
 echo ""
-echo "=== Step 4: Translate custom KST files to Java tests ==="
+echo "=== Step 5: Translate custom KST files to Java tests ==="
 # Create overlay directory mimicking upstream structure
 OVERLAY_DIR="$WORK_DIR/overlay"
 OVERLAY_TRANSLATOR_DIR="$OVERLAY_DIR/translator"
@@ -176,7 +213,7 @@ if [ "$TEST_COUNT" -ne "$KST_COUNT" ]; then
 fi
 
 echo ""
-echo "=== Step 5: Build Kaitai Java runtime ==="
+echo "=== Step 6: Build Kaitai Java runtime ==="
 if [ ! -d "$JAVA_RUNTIME_DIR/src/main/java" ]; then
     echo "ERROR: Kaitai Java runtime submodule not found at $JAVA_RUNTIME_DIR"
     echo "Run: git submodule update --init --recursive"
@@ -190,7 +227,7 @@ find "$JAVA_RUNTIME_DIR/src/main/java" -name "*.java" > "$RUNTIME_SOURCES"
 javac -d "$RUNTIME_CLASS_DIR" @"$RUNTIME_SOURCES"
 
 echo ""
-echo "=== Step 6: Compile Java tests ==="
+echo "=== Step 7: Compile Java tests ==="
 
 # Get TestNG and its runtime dependencies
 if command -v cs &>/dev/null; then
@@ -274,7 +311,7 @@ if [ "$TEST_COUNT" -gt 0 ]; then
 fi
 
 echo ""
-echo "=== Step 7: Run Java tests ==="
+echo "=== Step 8: Run Java tests ==="
 if [ "$TEST_COUNT" -gt 0 ]; then
     # Create TestNG config
     cat > "$WORK_DIR/testng.xml" <<TESTNG_EOF

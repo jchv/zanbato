@@ -1,0 +1,25 @@
+id: zb_expr_float_literals
+data: zb_expr_float_literals.bin
+asserts:
+  - actual: digits_only_exp
+    expected: 400.0
+  - actual: digits_only_exp_caps
+    expected: 400.0
+  - actual: digits_only_exp_signed
+    expected: 0.04
+  - actual: digits_only_exp_pos
+    expected: 400.0
+  - actual: fixed_normal
+    expected: 4.2
+  - actual: fixed_leading_dot
+    expected: 0.42
+  - actual: fixed_trailing_dot
+    expected: 42.0
+  - actual: fixed_leading_dot_exp
+    expected: 50.0
+  - actual: fixed_trailing_dot_exp
+    expected: 400.0
+  - actual: fixed_full_exp_neg
+    expected: 0.42
+  - actual: negative_leading_dot
+    expected: -0.5

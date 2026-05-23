@@ -134,9 +134,14 @@ func (v *ValidSpec) UnmarshalYAML(unmarshal func(any) error) error {
 			}
 		}
 		if val, ok := m["in-enum"]; ok {
-			if b, ok := val.(bool); ok {
-				v.InEnum = b
+			b, isBool := val.(bool)
+			if !isBool {
+				return fmt.Errorf("in-enum: expected boolean, got %T", val)
 			}
+			if !b {
+				return fmt.Errorf("only `true` is supported as value for in-enum, got `false` (if you don't want any validation, omit the `valid` key)")
+			}
+			v.InEnum = true
 		}
 		return nil
 	}

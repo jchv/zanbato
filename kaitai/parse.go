@@ -142,7 +142,9 @@ func translateEnumSpec(id Identifier, typ ksy.EnumSpec) (*Enum, error) {
 	result.ID = id
 	for _, val := range typ.Values {
 		value := big.NewInt(0)
-		value.SetString(val.Value, 0)
+		if _, ok := value.SetString(val.Value, 0); !ok {
+			return nil, fmt.Errorf("unable to parse %q as int in enum %q", val.Value, id)
+		}
 		result.Values = append(result.Values, EnumValue{value, Identifier(val.Spec.ID)})
 	}
 	return result, nil

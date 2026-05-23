@@ -366,7 +366,7 @@ func isnumber(c rune) bool {
 }
 func isidentstart(c rune) bool { return isletter(c) || c == '_' }
 func isident(c rune) bool      { return isidentstart(c) || isdigit(c) }
-func iswhitespace(c rune) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
+func iswhitespace(c rune) bool { return c == ' ' || c == '\n' }
 
 type parser struct {
 	s   []rune
@@ -551,13 +551,19 @@ func (p *parser) number() Node {
 		}
 	}
 
-	// Handle decimal point for floats - but only if followed by a digit
-	// (to avoid consuming `.as` in `0.5.as<f4>`)
+	// Handle decimal point for floats.
 	isFloat := false
-	if p.peek() == '.' && isdigit(p.peek2()) {
-		token += string(p.next()) // consume '.'
-		token += p.token(isnumber)
-		isFloat = true
+	if p.peek() == '.' {
+		peek2 := p.peek2()
+		// We may need to deal with expressions like: 0.5.as<f4>
+		// But we also may come across 5., or 4.E2.
+		// This here is imperfect because it prevents an otherwise valid member call
+		// of a number method if the name starts with e. We should improve this...
+		if isdigit(peek2) || lower(peek2) == 'e' || !isidentstart(peek2) {
+			token += string(p.next())
+			token += p.token(isnumber)
+			isFloat = true
+		}
 	}
 
 	// Handle exponent notation (e.g., 1e10, 2.5e-121)
@@ -753,6 +759,8 @@ func (p *parser) expr(depth int) Node {
 		}
 	case isnumber(c):
 		n = p.number()
+	case c == '.' && isdigit(p.peek2()):
+		n = p.number()
 	case c == '"' || c == '\'':
 		first := p.strlit().(StringNode)
 		combined := first.Str
@@ -795,6 +803,7 @@ func (p *parser) expr(depth int) Node {
 	if depth >= depthPrimaryExpr {
 		return n
 	}
+	sawCompare := false
 	for {
 		p.skipwhitespace()
 		switch p.peek() {
@@ -937,40 +946,50 @@ func (p *parser) expr(depth int) Node {
 		if depth >= depthBitOrExpr {
 			break
 		}
-		switch p.peek() {
-		case '=':
-			if p.peek2() != '=' {
-				panic(fmt.Errorf("expected '=', got %q", p.peek2()))
-			}
-			p.advance(2)
-			n = BinaryNode{Op: OpEqual, A: n, B: p.expr(depthBitOrExpr)}
-			continue
-		case '!':
-			if p.peek2() != '=' {
-				panic(fmt.Errorf("expected '=', got %q", p.peek2()))
-			}
-			p.advance(2)
-			n = BinaryNode{Op: OpNotEqual, A: n, B: p.expr(depthBitOrExpr)}
-			continue
-		case '<':
-			p.next()
-			if p.peek() == '=' {
+		// Comparisons are non-chaining. Prevent chaining multiple comparisons at the
+		// same precedence level.
+		if !sawCompare {
+			switch p.peek() {
+			case '=':
+				if p.peek2() != '=' {
+					panic(fmt.Errorf("expected '=', got %q", p.peek2()))
+				}
+				p.advance(2)
+				n = BinaryNode{Op: OpEqual, A: n, B: p.expr(depthBitOrExpr)}
+				sawCompare = true
+				continue
+			case '!':
+				if p.peek2() != '=' {
+					panic(fmt.Errorf("expected '=', got %q", p.peek2()))
+				}
+				p.advance(2)
+				n = BinaryNode{Op: OpNotEqual, A: n, B: p.expr(depthBitOrExpr)}
+				sawCompare = true
+				continue
+			case '<':
 				p.next()
-				n = BinaryNode{Op: OpLessThanEqual, A: n, B: p.expr(depthBitOrExpr)}
-				continue
-			} else {
-				n = BinaryNode{Op: OpLessThan, A: n, B: p.expr(depthBitOrExpr)}
-				continue
-			}
-		case '>':
-			p.next()
-			if p.peek() == '=' {
+				if p.peek() == '=' {
+					p.next()
+					n = BinaryNode{Op: OpLessThanEqual, A: n, B: p.expr(depthBitOrExpr)}
+					sawCompare = true
+					continue
+				} else {
+					n = BinaryNode{Op: OpLessThan, A: n, B: p.expr(depthBitOrExpr)}
+					sawCompare = true
+					continue
+				}
+			case '>':
 				p.next()
-				n = BinaryNode{Op: OpGreaterThanEqual, A: n, B: p.expr(depthBitOrExpr)}
-				continue
-			} else {
-				n = BinaryNode{Op: OpGreaterThan, A: n, B: p.expr(depthBitOrExpr)}
-				continue
+				if p.peek() == '=' {
+					p.next()
+					n = BinaryNode{Op: OpGreaterThanEqual, A: n, B: p.expr(depthBitOrExpr)}
+					sawCompare = true
+					continue
+				} else {
+					n = BinaryNode{Op: OpGreaterThan, A: n, B: p.expr(depthBitOrExpr)}
+					sawCompare = true
+					continue
+				}
 			}
 		}
 		if depth >= depthCompareExpr {
