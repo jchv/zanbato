@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jchv/zanbato/kaitai"
 	"github.com/jchv/zanbato/kaitai/expr"
 	"github.com/jchv/zanbato/kaitai/expr/engine"
 	"github.com/jchv/zanbato/kaitai/kst"
@@ -33,6 +34,12 @@ var testSources = []struct {
 		kstDir:     "../../testdata/spec/ks",
 		srcDir:     "../../testdata/src",
 	},
+}
+
+// compatTestIDs lists test IDs that are buggy and need the current latest
+// Kaitai Struct compatibility mode to run in Zanbato.
+var compatTestIDs = map[string]bool{
+	"zb_expr_div_mod_64": true,
 }
 
 var resolverPaths = []string{
@@ -89,6 +96,12 @@ func TestKST(t *testing.T) {
 				tree, err := NewTree(resolver, basename, struc, stream)
 				if err != nil {
 					t.Fatalf("error creating tree: %v", err)
+				}
+
+				// Enable the latest Kaitai Struct compatibility mode for tests that
+				// exercise bugs in Kaitai Struct.
+				if compatTestIDs[spec.ID] {
+					tree.Compat = kaitai.KaitaiStruct_0_11
 				}
 
 				// Register the custom processes used by upstream KS tests.

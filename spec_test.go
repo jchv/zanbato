@@ -85,6 +85,7 @@ func TestSpec(t *testing.T) {
 				}()
 				resolver := resolve.NewOSResolverWithPaths(resolverPaths)
 				emitter := golang.NewEmitter("test_formats", resolver)
+				emitter.SetCompat(kaitai.KaitaiStruct_0_11)
 				basename, struc, err := resolver.Resolve("", match)
 				if err != nil {
 					panic(err)

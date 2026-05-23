@@ -720,12 +720,16 @@ func (e *Emitter) wrapAnyForArith(node expr.Node, exprStr string) string {
 	return exprStr
 }
 
-func (e *Emitter) wrapBitwiseResult(node expr.BinaryNode, exprStr string) string {
+func (e *Emitter) wrapCalcIntResult(node expr.BinaryNode, exprStr string) string {
 	result := engine.ResultTypeOfNode(e.context, node)
 	if result == nil || e.declType(result) != "int" {
 		return exprStr
 	}
-	return fmt.Sprintf("int(int32(uint32(%s)))", exprStr)
+	// 32-bit truncation is only applied in compatibility mode.
+	if e.context.Compat.HasCalcIntTypeTruncationBug() {
+		return fmt.Sprintf("int(int32(%s))", exprStr)
+	}
+	return exprStr
 }
 
 func (e *Emitter) exprBinaryNode(t expr.BinaryNode) string {
@@ -738,17 +742,17 @@ func (e *Emitter) exprBinaryNode(t expr.BinaryNode) string {
 	bExpr := e.wrapAnyForArith(t.B, e.exprNode(t.B))
 	switch t.Op {
 	case expr.OpAdd:
-		return fmt.Sprintf("%s(%s) + %s(%s)", cast, aExpr, cast, bExpr)
+		return e.wrapCalcIntResult(t, fmt.Sprintf("%s(%s) + %s(%s)", cast, aExpr, cast, bExpr))
 	case expr.OpSub:
-		return fmt.Sprintf("%s(%s) - %s(%s)", cast, aExpr, cast, bExpr)
+		return e.wrapCalcIntResult(t, fmt.Sprintf("%s(%s) - %s(%s)", cast, aExpr, cast, bExpr))
 	case expr.OpMult:
-		return fmt.Sprintf("%s(%s) * %s(%s)", cast, aExpr, cast, bExpr)
+		return e.wrapCalcIntResult(t, fmt.Sprintf("%s(%s) * %s(%s)", cast, aExpr, cast, bExpr))
 	case expr.OpDiv:
 		// Kaitai uses floor division (Python-style), not truncation division (Go-style)
-		return fmt.Sprintf("(func() int { a, b := int(%s(%s)), int(%s(%s)); d := a / b; if (a%%b != 0) && ((a^b) < 0) { d-- }; return d }())", cast, aExpr, cast, bExpr)
+		return e.wrapCalcIntResult(t, fmt.Sprintf("(func() int { a, b := int(%s(%s)), int(%s(%s)); d := a / b; if (a%%b != 0) && ((a^b) < 0) { d-- }; return d }())", cast, aExpr, cast, bExpr))
 	case expr.OpMod:
 		// Kaitai uses modulo with floor semantics (Python-style)
-		return fmt.Sprintf("(func() int { a, b := int(%s(%s)), int(%s(%s)); return a - b*(func() int { d := a / b; if (a%%b != 0) && ((a^b) < 0) { d-- }; return d }()) }())", cast, aExpr, cast, bExpr)
+		return e.wrapCalcIntResult(t, fmt.Sprintf("(func() int { a, b := int(%s(%s)), int(%s(%s)); return a - b*(func() int { d := a / b; if (a%%b != 0) && ((a^b) < 0) { d-- }; return d }()) }())", cast, aExpr, cast, bExpr))
 	case expr.OpLessThan:
 		if e.isByteArrayComparison(t.A, t.B) {
 			e.needBytes = true
@@ -795,15 +799,15 @@ func (e *Emitter) exprBinaryNode(t expr.BinaryNode) string {
 		}
 		return fmt.Sprintf("%s(%s) != %s(%s)", cast, aExpr, cast, bExpr)
 	case expr.OpShiftLeft:
-		return fmt.Sprintf("%s(%s) << %s(%s)", cast, aExpr, cast, bExpr)
+		return e.wrapCalcIntResult(t, fmt.Sprintf("%s(%s) << %s(%s)", cast, aExpr, cast, bExpr))
 	case expr.OpShiftRight:
-		return fmt.Sprintf("%s(%s) >> %s(%s)", cast, aExpr, cast, bExpr)
+		return e.wrapCalcIntResult(t, fmt.Sprintf("%s(%s) >> %s(%s)", cast, aExpr, cast, bExpr))
 	case expr.OpBitAnd:
-		return e.wrapBitwiseResult(t, fmt.Sprintf("%s(%s) & %s(%s)", cast, aExpr, cast, bExpr))
+		return e.wrapCalcIntResult(t, fmt.Sprintf("%s(%s) & %s(%s)", cast, aExpr, cast, bExpr))
 	case expr.OpBitOr:
-		return e.wrapBitwiseResult(t, fmt.Sprintf("%s(%s) | %s(%s)", cast, aExpr, cast, bExpr))
+		return e.wrapCalcIntResult(t, fmt.Sprintf("%s(%s) | %s(%s)", cast, aExpr, cast, bExpr))
 	case expr.OpBitXor:
-		return e.wrapBitwiseResult(t, fmt.Sprintf("%s(%s) ^ %s(%s)", cast, aExpr, cast, bExpr))
+		return e.wrapCalcIntResult(t, fmt.Sprintf("%s(%s) ^ %s(%s)", cast, aExpr, cast, bExpr))
 	case expr.OpLogicalAnd:
 		return fmt.Sprintf("%s(%s) && %s(%s)", cast, aExpr, cast, bExpr)
 	case expr.OpLogicalOr:

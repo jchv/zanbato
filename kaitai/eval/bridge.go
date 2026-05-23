@@ -111,6 +111,7 @@ func (t *Tree) contextForNode(scope *Node) *engine.EvalContext {
 	}
 
 	ctx := engine.NewEvalContext(typeCtx)
+	ctx.Compat = t.Compat
 
 	ctx.OnResolve = func(sym *engine.ExprValue) *engine.ExprValue {
 		// Prevent arbitrarily deep recursion

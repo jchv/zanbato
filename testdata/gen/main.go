@@ -94,6 +94,7 @@ func main() {
 		{"zb_expr_unary_plus.bin", genSingleZeroByte},
 		{"zb_expr_arr_trailing.bin", genSingleZeroByte},
 		{"zb_expr_str_concat.bin", genSingleZeroByte},
+		{"zb_expr_div_mod_64.bin", genExprDivMod64},
 
 		// Coverage gap tests
 		{"zb_nav_any_typed.bin", genNavAnyTyped},
@@ -609,4 +610,13 @@ func genExprUtf8() []byte {
 	utf8Part := []byte("a\xe4\xb8\x96\xe7\x95\x8cb\x00")
 	utf16Part := []byte("\x61\x00\x16\x4e\x4c\x75\x62\x00\x63\x00\x64\x00")
 	return append(utf8Part, utf16Part...)
+}
+
+func genExprDivMod64() []byte {
+	buf := make([]byte, 16)
+	uVal := uint64(922337203685477580)
+	sVal := int64(922337203685477580)
+	binary.LittleEndian.PutUint64(buf[0:8], uVal)
+	binary.LittleEndian.PutUint64(buf[8:16], uint64(sVal))
+	return buf
 }

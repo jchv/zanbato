@@ -1,0 +1,19 @@
+id: zb_expr_div_mod_64
+data: zb_expr_div_mod_64.bin
+asserts:
+  - actual: val_u8
+    expected: 922337203685477580
+  - actual: val_s8
+    expected: 922337203685477580
+  - actual: div_u8
+    expected: -1511828489
+  - actual: div_s8
+    expected: -1511828489
+  - actual: mod_u8
+    expected: 80
+  - actual: mod_s8
+    expected: 80
+  - actual: invert_u8
+    expected: -922337203685477581
+  - actual: invert_s8
+    expected: -922337203685477581

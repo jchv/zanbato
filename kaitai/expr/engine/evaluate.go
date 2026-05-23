@@ -656,45 +656,54 @@ func evalBinary(context *EvalContext, node expr.BinaryNode) (*ExprValue, error) 
 	if err != nil {
 		return nil, err
 	}
+	var result *ExprValue
 	switch node.Op {
 	case expr.OpAdd:
-		return evalAdd(a, b)
+		result, err = evalAdd(a, b)
 	case expr.OpSub:
-		return evalSub(a, b)
+		result, err = evalSub(a, b)
 	case expr.OpMult:
-		return evalMul(a, b)
+		result, err = evalMul(a, b)
 	case expr.OpDiv:
-		return evalDiv(a, b)
+		result, err = evalDiv(a, b)
 	case expr.OpMod:
-		return evalMod(a, b)
+		result, err = evalMod(a, b)
 	case expr.OpLessThan:
-		return evalCmp(a, b, CompareLessThan)
+		result, err = evalCmp(a, b, CompareLessThan)
 	case expr.OpLessThanEqual:
-		return evalCmp(a, b, CompareLessThan|CompareEqual)
+		result, err = evalCmp(a, b, CompareLessThan|CompareEqual)
 	case expr.OpGreaterThan:
-		return evalCmp(a, b, CompareGreaterThan)
+		result, err = evalCmp(a, b, CompareGreaterThan)
 	case expr.OpGreaterThanEqual:
-		return evalCmp(a, b, CompareGreaterThan|CompareEqual)
+		result, err = evalCmp(a, b, CompareGreaterThan|CompareEqual)
 	case expr.OpEqual:
-		return evalCmp(a, b, CompareEqual)
+		result, err = evalCmp(a, b, CompareEqual)
 	case expr.OpNotEqual:
-		return evalCmp(a, b, CompareLessThan|CompareGreaterThan)
+		result, err = evalCmp(a, b, CompareLessThan|CompareGreaterThan)
 	case expr.OpShiftLeft:
-		return evalShl(a, b)
+		result, err = evalShl(a, b)
 	case expr.OpShiftRight:
-		return evalShr(a, b)
+		result, err = evalShr(a, b)
 	case expr.OpBitAnd:
-		return evalBitAnd(a, b)
+		result, err = evalBitAnd(a, b)
 	case expr.OpBitOr:
-		return evalBitOr(a, b)
+		result, err = evalBitOr(a, b)
 	case expr.OpBitXor:
-		return evalBitXor(a, b)
+		result, err = evalBitXor(a, b)
 	case expr.OpLogicalAnd:
-		return evalAnd(a, b)
+		result, err = evalAnd(a, b)
 	case expr.OpLogicalOr:
-		return evalOr(a, b)
+		result, err = evalOr(a, b)
+	default:
+		return nil, fmt.Errorf("unhandled binary op: %s", node.Op.String())
 	}
-	return nil, fmt.Errorf("unhandled binary op: %s", node.Op.String())
+	if err != nil {
+		return nil, err
+	}
+	if context.Compat.HasCalcIntTypeTruncationBug() && result.Kind == IntegerKind && result.Integer != nil {
+		return newSignedInt32IntegerValue(result.Integer.Value), nil
+	}
+	return result, nil
 }
 
 func evalAdd(a *ExprValue, b *ExprValue) (*ExprValue, error) {

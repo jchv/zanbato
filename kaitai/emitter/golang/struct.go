@@ -38,6 +38,7 @@ type Emitter struct {
 	artifacts   []emitter.Artifact
 	visited     map[*kaitai.Struct]struct{}
 	debugAlways bool
+	compat      kaitai.Compatibility
 
 	needRoot    bool
 	needParent  bool
@@ -69,6 +70,7 @@ func NewEmitter(pkgpath string, resolver resolve.Resolver) *Emitter {
 		resolver: resolver,
 		context:  engine.NewContext(),
 		visited:  make(map[*kaitai.Struct]struct{}),
+		compat:   engine.DefaultCompat,
 	}
 }
 
@@ -78,11 +80,17 @@ func (e *Emitter) SetDebug(enabled bool) {
 	e.debugAlways = enabled
 }
 
+// SetCompat sets the compatibility mode for generated code.
+func (e *Emitter) SetCompat(c kaitai.Compatibility) {
+	e.compat = c
+}
+
 // Emit emits Go code for the given kaitai struct.
 func (e *Emitter) Emit(inputname string, s *kaitai.Struct) []emitter.Artifact {
 	e.endian = types.UnspecifiedOrder
 	e.bitEndian = types.UnspecifiedBitOrder
 	e.context = engine.NewContext()
+	e.context.Compat = e.compat
 	e.artifacts = nil
 	e.visited = make(map[*kaitai.Struct]struct{})
 	e.needRoot = false

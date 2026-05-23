@@ -9,6 +9,10 @@ import (
 	kaitai_io "github.com/jchw-forks/kaitai_struct_go_runtime/kaitai"
 )
 
+// DefaultCompat is the compatibility mode used when creating a new Context
+// via NewContext. It is set to ZanbatoNative by default.
+var DefaultCompat = kaitai.ZanbatoNative
+
 //go:generate go run golang.org/x/tools/cmd/stringer -type=BuiltinMethod,ExprKind -output context_string.go
 
 // BuiltinMethod indexes the built-in methods.
@@ -871,7 +875,8 @@ type Context struct {
 
 	stream *ExprValue
 	tmp    *ExprValue
-	index  *ExprValue // current `_index` value when evaluating inside an array element
+	index  *ExprValue
+	Compat kaitai.Compatibility
 }
 
 // NewContext creates a new symbol context.
@@ -881,6 +886,7 @@ func NewContext() *Context {
 		module: NewValueRoot(),
 		local:  NewValueRoot(),
 		stream: NewStreamValue(),
+		Compat: DefaultCompat,
 	}
 }
 
@@ -912,6 +918,7 @@ func (context *Context) WithModuleRoot(symbol *ExprValue) *Context {
 		stream: context.stream,
 		tmp:    context.tmp,
 		index:  context.index,
+		Compat: context.Compat,
 	}
 }
 
@@ -923,6 +930,7 @@ func (context *Context) WithLocalRoot(symbol *ExprValue) *Context {
 		stream: context.stream,
 		tmp:    context.tmp,
 		index:  context.index,
+		Compat: context.Compat,
 	}
 }
 
@@ -933,6 +941,7 @@ func (context *Context) WithTemporary(symbol *ExprValue) *Context {
 		local:  context.local,
 		stream: context.stream,
 		tmp:    symbol,
+		Compat: context.Compat,
 	}
 }
 
@@ -944,12 +953,10 @@ func (context *Context) WithStream(stream *ExprValue) *Context {
 		stream: stream,
 		tmp:    context.tmp,
 		index:  context.index,
+		Compat: context.Compat,
 	}
 }
 
-// WithIndex returns a copy of context with `_index` bound to the given value.
-// Used by repeat-* loops so size and other expressions can reference the
-// current iteration index.
 func (context *Context) WithIndex(index *ExprValue) *Context {
 	return &Context{
 		global: context.global,
@@ -958,6 +965,7 @@ func (context *Context) WithIndex(index *ExprValue) *Context {
 		stream: context.stream,
 		tmp:    context.tmp,
 		index:  index,
+		Compat: context.Compat,
 	}
 }
 

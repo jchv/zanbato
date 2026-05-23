@@ -6,14 +6,18 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jchv/zanbato/kaitai"
 	"github.com/jchv/zanbato/kaitai/emitter/golang"
 	"github.com/jchv/zanbato/kaitai/resolve"
 )
 
 func main() {
+	var compat kaitai.Compatibility
+
 	pkg := flag.String("pkg", "", "Go package path to use")
 	out := flag.String("out", "", "File system output path to use")
 	debug := flag.Bool("debug", false, "Enable debug features in generated code")
+	flag.Var(&compat, "compat", "Compatibility mode: native (default) or 0.11")
 	flag.Parse()
 	if flag.NArg() != 1 {
 		log.Fatalln("Wrong number of arguments; pass your root .ksy path.")
@@ -22,6 +26,7 @@ func main() {
 	resolver := resolve.NewOSResolver()
 	emitter := golang.NewEmitter(*pkg, resolver)
 	emitter.SetDebug(*debug)
+	emitter.SetCompat(compat)
 	basename, struc, err := resolver.Resolve("", rootname)
 	if err != nil {
 		log.Fatalf("Error resolving root struct: %v", err)

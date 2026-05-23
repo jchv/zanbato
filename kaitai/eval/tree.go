@@ -35,6 +35,9 @@ type Tree struct {
 	// KSY-canonical name (bare identifier or dotted member chain). Set via
 	// RegisterProcess. nil until first use.
 	processes map[string]ProcessFunc
+
+	// Compat is the compatibility mode for expression evaluation.
+	Compat kaitai.Compatibility
 }
 
 // pushIndex sets the current _index value for the duration of an array
@@ -100,6 +103,7 @@ func NewTree(resolver resolve.Resolver, inputName string, schema *kaitai.Struct,
 		inputName: inputName,
 		schema:    schema,
 		typeCtx:   engine.NewContext(),
+		Compat:    engine.DefaultCompat,
 	}
 
 	// Resolve imports into the type context
