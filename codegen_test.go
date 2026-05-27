@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jchv/zanbato/kaitai/emitter/c"
 	"github.com/jchv/zanbato/kaitai/emitter/golang"
 	"github.com/jchv/zanbato/kaitai/resolve"
 	"github.com/stretchr/testify/assert"
@@ -49,14 +50,28 @@ func TestCodeGeneration(t *testing.T) {
 					"internal/third_party/kaitai_struct_tests/formats",
 					"internal/third_party/kaitai_struct_tests/formats/ks_path",
 				})
-				emitter := golang.NewEmitter("test_formats", resolver)
+
+				outDir := t.TempDir()
+
+				goEmitter := golang.NewEmitter("test_formats", resolver)
 				basename, struc, err := resolver.Resolve("", match)
 				if err != nil {
 					panic(fmt.Errorf("error resolving root struct: %w", err))
 				}
+				artifacts := goEmitter.Emit(basename, struc)
+				for _, artifact := range artifacts {
+					outname := filepath.Join(outDir, artifact.Filename)
+					if err := os.WriteFile(outname, artifact.Body, 0o644); err != nil {
+						panic(fmt.Errorf("error writing %s: %w", outname, err))
+					}
+				}
 
-				outDir := t.TempDir()
-				artifacts := emitter.Emit(basename, struc)
+				cEmitter := c.NewEmitter(resolver)
+				basename, struc, err = resolver.Resolve("", match)
+				if err != nil {
+					panic(fmt.Errorf("error resolving root struct: %w", err))
+				}
+				artifacts = cEmitter.Emit(basename, struc)
 				for _, artifact := range artifacts {
 					outname := filepath.Join(outDir, artifact.Filename)
 					if err := os.WriteFile(outname, artifact.Body, 0o644); err != nil {

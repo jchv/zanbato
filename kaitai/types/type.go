@@ -162,6 +162,31 @@ func (k Kind) Promote(k2 Kind) Kind {
 	return k
 }
 
+// SplitEndian returns the little-endian and big-endian variants of a
+// kind that has dependent endianness (e.g. U2 -> (U2le, U2be)). For kinds
+// that are not endian-dependent (U1, S1, Bits, ...) it returns (k, k).
+func (k Kind) SplitEndian() (le, be Kind) {
+	switch k {
+	case U2:
+		return U2le, U2be
+	case U4:
+		return U4le, U4be
+	case U8:
+		return U8le, U8be
+	case S2:
+		return S2le, S2be
+	case S4:
+		return S4le, S4be
+	case S8:
+		return S8le, S8be
+	case F4:
+		return F4le, F4be
+	case F8:
+		return F8le, F8be
+	}
+	return k, k
+}
+
 // BitsType contains data for bits types.
 type BitsType struct {
 	Width  int

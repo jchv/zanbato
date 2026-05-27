@@ -5,14 +5,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/jchv/zanbato/kaitai"
 	"github.com/jchv/zanbato/kaitai/expr"
 	"github.com/jchv/zanbato/kaitai/expr/engine"
 	"github.com/jchv/zanbato/kaitai/types"
 )
 
-// strucWrite generates the Write() method for a struct.
-func (e *Emitter) strucWrite(unit *goUnit, gs *goStruct, val *engine.ExprValue, forceEndian types.EndianKind) {
+// emitWriteFunc generates the Write() method for a struct.
+func (e *Emitter) emitWriteFunc(unit *goUnit, gs *goStruct, val *engine.ExprValue, forceEndian types.EndianKind) {
 	ks := val.Struct.Type
 
 	endianSuffix := ""
@@ -30,13 +29,8 @@ func (e *Emitter) strucWrite(unit *goUnit, gs *goStruct, val *engine.ExprValue, 
 		out:  []goVar{{name: "err", typ: "error"}},
 	}
 
-	// Save/restore expression engine state
-	oldNeedRoot := e.needRoot
-	oldNeedParent := e.needParent
-	oldInWriteExpr := e.inWriteExpr
-	e.needRoot = false
-	e.needParent = false
-	e.inWriteExpr = true
+	defer e.saveExprMode()()
+	e.mode = exprMode{inWriteExpr: true}
 
 	inBitsMode := false
 	bitsLE := false
@@ -66,10 +60,10 @@ func (e *Emitter) strucWrite(unit *goUnit, gs *goStruct, val *engine.ExprValue, 
 				if bitsLE {
 					endianSuffix2 = "Le"
 				}
-				writeMethod.printf("if err = wstream.WriteBitsInt%s(%d, this._align_%d); err != nil { return err }", endianSuffix2, padBits, alignIdx)
+				writeMethod.pf("if err = wstream.WriteBitsInt%s(%d, this._align_%d); err != nil { return err }", endianSuffix2, padBits, alignIdx)
 				alignIdx++
 			} else {
-				writeMethod.printf("if err = wstream.AlignToByte(); err != nil { return err }")
+				writeMethod.pf("if err = wstream.AlignToByte(); err != nil { return err }")
 			}
 			totalBits = 0
 		}
@@ -78,7 +72,7 @@ func (e *Emitter) strucWrite(unit *goUnit, gs *goStruct, val *engine.ExprValue, 
 			bitsLE = rt.TypeRef.Bits.Endian.Kind == types.LittleBitEndian
 		}
 		inBitsMode = isBits
-		e.writeAttr(unit, &writeMethod, attr, forceEndian)
+		e.emitAttrWrite(unit, &writeMethod, attr, forceEndian)
 	}
 	if inBitsMode {
 		padBits := (8 - (totalBits % 8)) % 8
@@ -87,33 +81,29 @@ func (e *Emitter) strucWrite(unit *goUnit, gs *goStruct, val *engine.ExprValue, 
 			if bitsLE {
 				endianSuffix2 = "Le"
 			}
-			writeMethod.printf("if err = wstream.WriteBitsInt%s(%d, this._align_%d); err != nil { return err }", endianSuffix2, padBits, alignIdx)
+			writeMethod.pf("if err = wstream.WriteBitsInt%s(%d, this._align_%d); err != nil { return err }", endianSuffix2, padBits, alignIdx)
 		} else {
-			writeMethod.printf("if err = wstream.AlignToByte(); err != nil { return err }")
+			writeMethod.pf("if err = wstream.AlignToByte(); err != nil { return err }")
 		}
 	}
 
-	writeMethod.printf("return nil")
+	writeMethod.pf("return nil")
 
 	// Add stream/parent/root locals for expression compatibility
 	// Some expressions reference 'stream', '_parent', or '_root' in write context.
-	writeMethod.preprintf("_ = _root")
-	writeMethod.preprintf("_root := this.Root_")
-	writeMethod.preprintf("_ = _parent")
-	writeMethod.preprintf("_parent := this.Parent_")
-	writeMethod.preprintf("_ = stream")
-	writeMethod.preprintf("stream := this.IO_")
-
-	e.needRoot = oldNeedRoot
-	e.needParent = oldNeedParent
-	e.inWriteExpr = oldInWriteExpr
+	writeMethod.ppf("_ = _root")
+	writeMethod.ppf("_root := this.Root_")
+	writeMethod.ppf("_ = _parent")
+	writeMethod.ppf("_parent := this.Parent_")
+	writeMethod.ppf("_ = stream")
+	writeMethod.ppf("stream := this.IO_")
 
 	_ = ks
 	unit.methods = append(unit.methods, writeMethod)
 }
 
-// writeAttr generates the write code for a single attribute.
-func (e *Emitter) writeAttr(unit *goUnit, fn *goFunc, typ *engine.ExprValue, forcedEndian types.EndianKind) {
+// emitAttrWrite generates the write code for a single attribute.
+func (e *Emitter) emitAttrWrite(unit *goUnit, fn *goFunc, typ *engine.ExprValue, forcedEndian types.EndianKind) {
 	a := typ.Attr
 	rt := a.Type.FoldEndian(e.endian).FoldBitEndian(e.bitEndian)
 	switch forcedEndian {
@@ -128,9 +118,9 @@ func (e *Emitter) writeAttr(unit *goUnit, fn *goFunc, typ *engine.ExprValue, for
 	// Conditional field - use cached condition for IO-dependent expressions
 	if a.If != nil {
 		if exprReferencesIO(a.If) {
-			fn.printf("if this._if_%s {", string(a.ID))
+			fn.pf("if this._if_%s {", string(a.ID))
 		} else {
-			fn.printf("if %s {", e.expr(a.If))
+			fn.pf("if %s {", e.expr(a.If))
 		}
 		fn.indent()
 	}
@@ -141,40 +131,40 @@ func (e *Emitter) writeAttr(unit *goUnit, fn *goFunc, typ *engine.ExprValue, for
 			rawField := fmt.Sprintf("this._raw_%s", string(a.ID))
 			if a.Repeat != nil {
 				// For repeated switch+size, each element's raw bytes are indexed
-				fn.printf("for _si, _sv := range %s {", fieldName)
+				fn.pf("for _si, _sv := range %s {", fieldName)
 				fn.indent()
-				fn.printf("_ = _sv")
-				fn.printf("if %s != nil && _si < len(%s) {", rawField, rawField)
+				fn.pf("_ = _sv")
+				fn.pf("if %s != nil && _si < len(%s) {", rawField, rawField)
 				fn.indent()
-				fn.printf("if err = wstream.WriteBytes(%s[_si]); err != nil { return err }", rawField)
+				fn.pf("if err = wstream.WriteBytes(%s[_si]); err != nil { return err }", rawField)
 				fn.unindent()
-				fn.printf("} else {")
+				fn.pf("} else {")
 				fn.indent()
 				// Fallback: write via switch helper
 				ts := a.Type.TypeSwitch
 				helperName := "write" + e.typeSwitchName(a.ID)
 				if exprContainsIndex(ts.SwitchOn) {
-					fn.printf("if err = this.%s(wstream, _sv, _si); err != nil { return err }", helperName)
+					fn.pf("if err = this.%s(wstream, _sv, _si); err != nil { return err }", helperName)
 				} else {
-					fn.printf("if err = this.%s(wstream, _sv); err != nil { return err }", helperName)
+					fn.pf("if err = this.%s(wstream, _sv); err != nil { return err }", helperName)
 				}
 				fn.unindent()
-				fn.printf("}")
+				fn.pf("}")
 				fn.unindent()
-				fn.printf("}")
+				fn.pf("}")
 			} else {
-				fn.printf("if %s != nil {", rawField)
+				fn.pf("if %s != nil {", rawField)
 				fn.indent()
-				fn.printf("if err = wstream.WriteBytes(%s); err != nil { return err }", rawField)
+				fn.pf("if err = wstream.WriteBytes(%s); err != nil { return err }", rawField)
 				fn.unindent()
-				fn.printf("} else {")
+				fn.pf("} else {")
 				fn.indent()
-				e.writeTypeSwitchCall(fn, typ)
+				e.emitTypeSwitchWriteCall(fn, typ)
 				fn.unindent()
-				fn.printf("}")
+				fn.pf("}")
 			}
 		} else {
-			e.writeTypeSwitchCall(fn, typ)
+			e.emitTypeSwitchWriteCall(fn, typ)
 		}
 	} else if rt.TypeRef != nil && rt.TypeRef.Kind == types.User {
 		// User type
@@ -187,7 +177,7 @@ func (e *Emitter) writeAttr(unit *goUnit, fn *goFunc, typ *engine.ExprValue, for
 
 	if a.If != nil {
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	}
 }
 
@@ -216,9 +206,9 @@ func (e *Emitter) writePrimitive(unit *goUnit, fn *goFunc, typ *engine.ExprValue
 	switch {
 	case a.Repeat != nil:
 		// Repeated field - write all elements (use index for process raw storage)
-		fn.printf("for i, _item := range %s {", fieldName)
+		fn.pf("for i, _item := range %s {", fieldName)
 		fn.indent()
-		fn.printf("_ = i")
+		fn.pf("_ = i")
 		itemExpr := "_item"
 		if a.Enum != "" {
 			baseType := e.declTypeRef(rt.TypeRef, nil)
@@ -228,18 +218,18 @@ func (e *Emitter) writePrimitive(unit *goUnit, fn *goFunc, typ *engine.ExprValue
 		if rt.TypeRef != nil && rt.TypeRef.Kind == types.Bits {
 			if rt.TypeRef.Bits.Width == 1 && a.Enum == "" {
 				// b1 (bool) repeated: convert bool->uint64
-				fn.printf("if err = wstream.WriteBitsIntBe(1, func() uint64 { if _item { return 1 }; return 0 }()); err != nil { return err }")
+				fn.pf("if err = wstream.WriteBitsIntBe(1, func() uint64 { if _item { return 1 }; return 0 }()); err != nil { return err }")
 				fn.unindent()
-				fn.printf("}")
+				fn.pf("}")
 				return
 			}
 			endianSuffix2 := "Be"
 			if rt.TypeRef.Bits.Endian.Kind == types.LittleBitEndian {
 				endianSuffix2 = "Le"
 			}
-			fn.printf("if err = wstream.WriteBitsInt%s(%d, uint64(_item)); err != nil { return err }", endianSuffix2, rt.TypeRef.Bits.Width)
+			fn.pf("if err = wstream.WriteBitsInt%s(%d, uint64(_item)); err != nil { return err }", endianSuffix2, rt.TypeRef.Bits.Width)
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 			return
 		}
 		// Handle repeated raw-tail fields (pad/term per element)
@@ -257,74 +247,74 @@ func (e *Emitter) writePrimitive(unit *goUnit, fn *goFunc, typ *engine.ExprValue
 			if rt.TypeRef.Kind == types.String {
 				dataExpr = fmt.Sprintf("[]byte(%s)", itemExpr)
 			}
-			fn.printf("if err = wstream.WriteBytes(%s); err != nil { return err }", dataExpr)
+			fn.pf("if err = wstream.WriteBytes(%s); err != nil { return err }", dataExpr)
 			if termByte >= 0 && !include {
-				fn.printf("if i < len(this._raw_tail_%s) && (len(%s) > 0 || len(this._raw_tail_%s[i]) > 0) {", string(a.ID), dataExpr, string(a.ID))
+				fn.pf("if i < len(this._raw_tail_%s) && (len(%s) > 0 || len(this._raw_tail_%s[i]) > 0) {", string(a.ID), dataExpr, string(a.ID))
 				fn.indent()
-				fn.printf("if err = wstream.WriteU1(%d); err != nil { return err }", termByte)
+				fn.pf("if err = wstream.WriteU1(%d); err != nil { return err }", termByte)
 				fn.unindent()
-				fn.printf("}")
+				fn.pf("}")
 			}
-			fn.printf("if i < len(this._raw_tail_%s) && this._raw_tail_%s[i] != nil {", string(a.ID), string(a.ID))
+			fn.pf("if i < len(this._raw_tail_%s) && this._raw_tail_%s[i] != nil {", string(a.ID), string(a.ID))
 			fn.indent()
-			fn.printf("if err = wstream.WriteBytes(this._raw_tail_%s[i]); err != nil { return err }", string(a.ID))
+			fn.pf("if err = wstream.WriteBytes(this._raw_tail_%s[i]); err != nil { return err }", string(a.ID))
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 			return
 		}
 		if a.Process != nil && (rt.TypeRef.Kind == types.Bytes || rt.TypeRef.Kind == types.String) {
 			// Use stored raw pre-process bytes if available
-			fn.printf("if this._raw_%s != nil && i < len(this._raw_%s) {", string(a.ID), string(a.ID))
+			fn.pf("if this._raw_%s != nil && i < len(this._raw_%s) {", string(a.ID), string(a.ID))
 			fn.indent()
-			fn.printf("if err = wstream.WriteBytes(this._raw_%s[i]); err != nil { return err }", string(a.ID))
+			fn.pf("if err = wstream.WriteBytes(this._raw_%s[i]); err != nil { return err }", string(a.ID))
 			fn.unindent()
-			fn.printf("} else {")
+			fn.pf("} else {")
 			fn.indent()
-			fn.printf("{")
+			fn.pf("{")
 			fn.indent()
 			if rt.TypeRef.Kind == types.String {
-				fn.printf("_raw := []byte(%s)", itemExpr)
+				fn.pf("_raw := []byte(%s)", itemExpr)
 			} else {
-				fn.printf("_raw := append([]byte(nil), %s...)", itemExpr)
+				fn.pf("_raw := append([]byte(nil), %s...)", itemExpr)
 			}
-			e.emitProcessReverse(fn, unit, a.Process, "_raw")
-			fn.printf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
+			e.emitUnprocess(fn, unit, a.Process, "_raw")
+			fn.pf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 		} else {
 			writeCall := e.writeCallRef(rt.TypeRef, itemExpr)
-			fn.printf("if err = %s; err != nil { return err }", writeCall)
+			fn.pf("if err = %s; err != nil { return err }", writeCall)
 		}
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	default:
 		// When both process AND raw-tail apply, _raw_ has the full pre-strip/pre-process bytes.
 		// Write them directly for perfect roundtrip.
 		if a.Process != nil && e.fieldNeedsRawTail(rt) {
-			fn.printf("if this._raw_%s != nil {", string(a.ID))
+			fn.pf("if this._raw_%s != nil {", string(a.ID))
 			fn.indent()
-			fn.printf("if err = wstream.WriteBytes(this._raw_%s); err != nil { return err }", string(a.ID))
+			fn.pf("if err = wstream.WriteBytes(this._raw_%s); err != nil { return err }", string(a.ID))
 			fn.unindent()
-			fn.printf("} else {")
+			fn.pf("} else {")
 			fn.indent()
 			// Fallback: reverse process + reconstruct from raw tail
-			fn.printf("{")
+			fn.pf("{")
 			fn.indent()
 			if rt.TypeRef.Kind == types.String {
-				fn.printf("_raw := []byte(%s)", valExpr)
+				fn.pf("_raw := []byte(%s)", valExpr)
 			} else {
-				fn.printf("_raw := append([]byte(nil), %s...)", valExpr)
+				fn.pf("_raw := append([]byte(nil), %s...)", valExpr)
 			}
-			e.emitProcessReverse(fn, unit, a.Process, "_raw")
-			fn.printf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
+			e.emitUnprocess(fn, unit, a.Process, "_raw")
+			fn.pf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 			return
 		}
 		// Single field - handle raw tail fields for roundtrip
@@ -346,41 +336,41 @@ func (e *Emitter) writePrimitive(unit *goUnit, fn *goFunc, typ *engine.ExprValue
 				if e.needsEncodingConversion(enc) {
 					isMultiByte = isMultiByteEncoding(enc)
 					encoder := e.encodingEncoder(unit, enc)
-					fn.printf("{")
+					fn.pf("{")
 					fn.indent()
-					fn.printf("_data, err := %s.Bytes([]byte(%s))", encoder, valExpr)
-					fn.printf("if err != nil { return err }")
+					fn.pf("_data, err := %s.Bytes([]byte(%s))", encoder, valExpr)
+					fn.pf("if err != nil { return err }")
 				} else {
-					fn.printf("{")
+					fn.pf("{")
 					fn.indent()
-					fn.printf("_data := []byte(%s)", valExpr)
+					fn.pf("_data := []byte(%s)", valExpr)
 				}
 			} else {
-				fn.printf("{")
+				fn.pf("{")
 				fn.indent()
 				if rt.TypeRef.Kind == types.String {
-					fn.printf("_data := []byte(%s)", valExpr)
+					fn.pf("_data := []byte(%s)", valExpr)
 				} else {
-					fn.printf("_data := %s", dataExpr)
+					fn.pf("_data := %s", dataExpr)
 				}
 			}
-			fn.printf("if err = wstream.WriteBytes(_data); err != nil { return err }")
+			fn.pf("if err = wstream.WriteBytes(_data); err != nil { return err }")
 			if termByte >= 0 && !include && !isMultiByte {
 				// For single-byte terminators, write the terminator (raw_tail starts AFTER it)
 				// For multi-byte terminators, raw_tail starts AT the terminator (skip explicit write)
-				fn.printf("if len(_data) > 0 || len(this._raw_tail_%s) > 0 {", string(a.ID))
+				fn.pf("if len(_data) > 0 || len(this._raw_tail_%s) > 0 {", string(a.ID))
 				fn.indent()
-				fn.printf("if err = wstream.WriteU1(%d); err != nil { return err }", termByte)
+				fn.pf("if err = wstream.WriteU1(%d); err != nil { return err }", termByte)
 				fn.unindent()
-				fn.printf("}")
+				fn.pf("}")
 			}
-			fn.printf("if this._raw_tail_%s != nil {", string(a.ID))
+			fn.pf("if this._raw_tail_%s != nil {", string(a.ID))
 			fn.indent()
-			fn.printf("if err = wstream.WriteBytes(this._raw_tail_%s); err != nil { return err }", string(a.ID))
+			fn.pf("if err = wstream.WriteBytes(this._raw_tail_%s); err != nil { return err }", string(a.ID))
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 			return
 		}
 		// Handle string encoding conversion (non-UTF8 strings need re-encoding)
@@ -388,72 +378,72 @@ func (e *Emitter) writePrimitive(unit *goUnit, fn *goFunc, typ *engine.ExprValue
 			enc := rt.TypeRef.String.Encoding
 			if e.needsEncodingConversion(enc) {
 				encoder := e.encodingEncoder(unit, enc)
-				fn.printf("{")
+				fn.pf("{")
 				fn.indent()
-				fn.printf("_enc_bytes, err := %s.Bytes([]byte(%s))", encoder, valExpr)
-				fn.printf("if err != nil { return err }")
+				fn.pf("_enc_bytes, err := %s.Bytes([]byte(%s))", encoder, valExpr)
+				fn.pf("if err != nil { return err }")
 				// Now write the encoded bytes using the appropriate method
 				if a.Process != nil {
-					fn.printf("_raw := _enc_bytes")
-					e.emitProcessReverse(fn, unit, a.Process, "_raw")
-					fn.printf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
+					fn.pf("_raw := _enc_bytes")
+					e.emitUnprocess(fn, unit, a.Process, "_raw")
+					fn.pf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
 				} else if e.fieldNeedsRawTail(rt) {
 					termByte := rt.TypeRef.String.Terminator
 					include := rt.TypeRef.String.Include
-					fn.printf("if err = wstream.WriteBytes(_enc_bytes); err != nil { return err }")
+					fn.pf("if err = wstream.WriteBytes(_enc_bytes); err != nil { return err }")
 					if !include {
-						fn.printf("if err = wstream.WriteU1(%d); err != nil { return err }", termByte)
+						fn.pf("if err = wstream.WriteU1(%d); err != nil { return err }", termByte)
 					}
-					fn.printf("if this._raw_tail_%s != nil {", string(a.ID))
+					fn.pf("if this._raw_tail_%s != nil {", string(a.ID))
 					fn.indent()
-					fn.printf("if err = wstream.WriteBytes(this._raw_tail_%s); err != nil { return err }", string(a.ID))
+					fn.pf("if err = wstream.WriteBytes(this._raw_tail_%s); err != nil { return err }", string(a.ID))
 					fn.unindent()
-					fn.printf("}")
+					fn.pf("}")
 				} else if rt.TypeRef.String.Size != nil {
 					terminator := rt.TypeRef.String.Terminator
 					padRight := rt.TypeRef.String.PadRight
 					if terminator >= 0 || padRight >= 0 {
-						fn.printf("if err = wstream.WriteBytesLimit(_enc_bytes, int(%s), %d, %d); err != nil { return err }", e.expr(rt.TypeRef.String.Size), terminator, padRight)
+						fn.pf("if err = wstream.WriteBytesLimit(_enc_bytes, int(%s), %d, %d); err != nil { return err }", e.expr(rt.TypeRef.String.Size), terminator, padRight)
 					} else {
-						fn.printf("if err = wstream.WriteBytes(_enc_bytes); err != nil { return err }")
+						fn.pf("if err = wstream.WriteBytes(_enc_bytes); err != nil { return err }")
 					}
 				} else if rt.TypeRef.String.Terminator >= 0 && !rt.TypeRef.String.Include && rt.TypeRef.String.Consume {
-					fn.printf("if err = wstream.WriteBytes(_enc_bytes); err != nil { return err }")
+					fn.pf("if err = wstream.WriteBytes(_enc_bytes); err != nil { return err }")
 					if isMultiByteEncoding(enc) {
-						fn.printf("if err = wstream.WriteBytes([]byte{%d, %d}); err != nil { return err }", rt.TypeRef.String.Terminator, rt.TypeRef.String.Terminator)
+						fn.pf("if err = wstream.WriteBytes([]byte{%d, %d}); err != nil { return err }", rt.TypeRef.String.Terminator, rt.TypeRef.String.Terminator)
 					} else {
-						fn.printf("if err = wstream.WriteU1(%d); err != nil { return err }", rt.TypeRef.String.Terminator)
+						fn.pf("if err = wstream.WriteU1(%d); err != nil { return err }", rt.TypeRef.String.Terminator)
 					}
 				} else {
-					fn.printf("if err = wstream.WriteBytes(_enc_bytes); err != nil { return err }")
+					fn.pf("if err = wstream.WriteBytes(_enc_bytes); err != nil { return err }")
 				}
 				fn.unindent()
-				fn.printf("}")
+				fn.pf("}")
 				return
 			}
 		}
 		// Handle process fields: write raw pre-process bytes directly
 		if a.Process != nil && rt.TypeRef != nil && (rt.TypeRef.Kind == types.Bytes || rt.TypeRef.Kind == types.String) {
-			fn.printf("if this._raw_%s != nil {", string(a.ID))
+			fn.pf("if this._raw_%s != nil {", string(a.ID))
 			fn.indent()
-			fn.printf("if err = wstream.WriteBytes(this._raw_%s); err != nil { return err }", string(a.ID))
+			fn.pf("if err = wstream.WriteBytes(this._raw_%s); err != nil { return err }", string(a.ID))
 			fn.unindent()
-			fn.printf("} else {")
+			fn.pf("} else {")
 			fn.indent()
 			// Fallback: try to reverse the process
-			fn.printf("{")
+			fn.pf("{")
 			fn.indent()
 			if rt.TypeRef.Kind == types.String {
-				fn.printf("_raw := []byte(%s)", valExpr)
+				fn.pf("_raw := []byte(%s)", valExpr)
 			} else {
-				fn.printf("_raw := append([]byte(nil), %s...)", valExpr)
+				fn.pf("_raw := append([]byte(nil), %s...)", valExpr)
 			}
-			e.emitProcessReverse(fn, unit, a.Process, "_raw")
-			fn.printf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
+			e.emitUnprocess(fn, unit, a.Process, "_raw")
+			fn.pf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 			return
 		}
 		if rt.TypeRef != nil && rt.TypeRef.Kind == types.Bits {
@@ -478,7 +468,7 @@ func (e *Emitter) writePrimitive(unit *goUnit, fn *goFunc, typ *engine.ExprValue
 			}
 		}
 		writeCall := e.writeCallRef(rt.TypeRef, valExpr)
-		fn.printf("if err = %s; err != nil { return err }", writeCall)
+		fn.pf("if err = %s; err != nil { return err }", writeCall)
 	}
 }
 
@@ -489,12 +479,12 @@ func (e *Emitter) writeUserType(unit *goUnit, fn *goFunc, typ *engine.ExprValue,
 	switch {
 	case a.Repeat != nil:
 		// Repeated user type - use indexed loop for expressions that reference _index
-		fn.printf("for i, _item := range %s {", fieldName)
+		fn.pf("for i, _item := range %s {", fieldName)
 		fn.indent()
-		fn.printf("_ = i")
+		fn.pf("_ = i")
 		e.writeUserTypeSingle(unit, fn, typ, "_item", forcedEndian)
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	default:
 		e.writeUserTypeSingle(unit, fn, typ, fieldName, forcedEndian)
 	}
@@ -515,51 +505,51 @@ func (e *Emitter) writeUserTypeSingle(unit *goUnit, fn *goFunc, typ *engine.Expr
 
 	if a.Size != nil {
 		// User type with size: use stored raw bytes if available, else re-serialize
-		fn.printf("{")
+		fn.pf("{")
 		fn.indent()
-		fn.printf("var _raw []byte")
+		fn.pf("var _raw []byte")
 		// Determine the raw field access expression based on repeat
 		rawFieldExpr := fmt.Sprintf("this._raw_%s", string(a.ID))
 		rawAccessExpr := rawFieldExpr
 		if a.Repeat != nil {
 			rawAccessExpr = fmt.Sprintf("%s[i]", rawFieldExpr)
 		}
-		fn.printf("_useRaw := false")
-		fn.printf("_ = _useRaw")
-		fn.printf("if %s != nil && len(%s) > 0 {", rawFieldExpr, rawAccessExpr)
+		fn.pf("_useRaw := false")
+		fn.pf("_ = _useRaw")
+		fn.pf("if %s != nil && len(%s) > 0 {", rawFieldExpr, rawAccessExpr)
 		fn.indent()
 		if a.Process != nil {
 			// Process field: _raw_ has the full pre-strip/pre-process bytes.
 			// Write them directly for perfect roundtrip - skip process reverse.
-			fn.printf("_raw = %s", rawAccessExpr)
-			fn.printf("_useRaw = true")
+			fn.pf("_raw = %s", rawAccessExpr)
+			fn.pf("_useRaw = true")
 		} else {
 			// Re-serialize into buffer, then overlay with original raw bytes
-			fn.printf("_buf := kaitai.NewSeekableBuffer(nil)")
-			fn.printf("_sub := kaitai.NewWriter(_buf)")
-			fn.printf("if err = %s.%s(_sub); err != nil { return err }", valExpr, writeMethodName)
-			fn.printf("_written := _buf.Bytes()")
-			fn.printf("_raw = make([]byte, len(%s))", rawAccessExpr)
-			fn.printf("copy(_raw, %s)", rawAccessExpr)
-			fn.printf("copy(_raw, _written)")
+			fn.pf("_buf := kaitai.NewSeekableBuffer(nil)")
+			fn.pf("_sub := kaitai.NewWriter(_buf)")
+			fn.pf("if err = %s.%s(_sub); err != nil { return err }", valExpr, writeMethodName)
+			fn.pf("_written := _buf.Bytes()")
+			fn.pf("_raw = make([]byte, len(%s))", rawAccessExpr)
+			fn.pf("copy(_raw, %s)", rawAccessExpr)
+			fn.pf("copy(_raw, _written)")
 		}
 		fn.unindent()
-		fn.printf("} else {")
+		fn.pf("} else {")
 		fn.indent()
-		fn.printf("_buf := kaitai.NewSeekableBuffer(nil)")
-		fn.printf("_sub := kaitai.NewWriter(_buf)")
-		fn.printf("if err = %s.%s(_sub); err != nil { return err }", valExpr, writeMethodName)
-		fn.printf("_raw = _buf.Bytes()")
+		fn.pf("_buf := kaitai.NewSeekableBuffer(nil)")
+		fn.pf("_sub := kaitai.NewWriter(_buf)")
+		fn.pf("if err = %s.%s(_sub); err != nil { return err }", valExpr, writeMethodName)
+		fn.pf("_raw = _buf.Bytes()")
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 
 		// Apply reverse process if applicable (skip when using stored raw bytes directly)
 		if a.Process != nil {
-			fn.printf("if !_useRaw {")
+			fn.pf("if !_useRaw {")
 			fn.indent()
-			e.emitProcessReverse(fn, unit, a.Process, "_raw")
+			e.emitUnprocess(fn, unit, a.Process, "_raw")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 		}
 
 		// Pad to declared size, inserting terminator and pad-right bytes from attr
@@ -577,92 +567,92 @@ func (e *Emitter) writeUserTypeSingle(unit *goUnit, fn *goFunc, typ *engine.Expr
 		needsTermOrPad := (termByte >= 0 && !include) || padByte != 0
 		// Check if we have raw tail data for roundtrip
 		hasRawTail := (a.Terminator != nil && *a.Terminator >= 0) || (a.PadRight != nil && *a.PadRight >= 0)
-		fn.printf("_size := int(%s)", e.expr(a.Size))
+		fn.pf("_size := int(%s)", e.expr(a.Size))
 		if hasRawTail {
 			// Use raw tail for exact reconstruction
-			fn.printf("if this._raw_tail_%s != nil {", string(a.ID))
+			fn.pf("if this._raw_tail_%s != nil {", string(a.ID))
 			fn.indent()
 			if a.Terminator != nil && *a.Terminator >= 0 && (a.Include == nil || !*a.Include) {
-				fn.printf("_raw = append(_raw, %d)", *a.Terminator)
+				fn.pf("_raw = append(_raw, %d)", *a.Terminator)
 			}
-			fn.printf("_raw = append(_raw, this._raw_tail_%s...)", string(a.ID))
+			fn.pf("_raw = append(_raw, this._raw_tail_%s...)", string(a.ID))
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 		}
-		fn.printf("if len(_raw) < _size {")
+		fn.pf("if len(_raw) < _size {")
 		fn.indent()
-		fn.printf("_padded := make([]byte, _size)")
-		fn.printf("copy(_padded, _raw)")
+		fn.pf("_padded := make([]byte, _size)")
+		fn.pf("copy(_padded, _raw)")
 		if needsTermOrPad && !hasRawTail {
-			fn.printf("_fill := len(_raw)")
+			fn.pf("_fill := len(_raw)")
 			if termByte >= 0 && !include {
-				fn.printf("if _fill < _size { _padded[_fill] = %d; _fill++ }", termByte)
+				fn.pf("if _fill < _size { _padded[_fill] = %d; _fill++ }", termByte)
 			}
 			if padByte != 0 {
-				fn.printf("for _j := _fill; _j < _size; _j++ { _padded[_j] = %d }", padByte)
+				fn.pf("for _j := _fill; _j < _size; _j++ { _padded[_j] = %d }", padByte)
 			}
 		}
-		fn.printf("_raw = _padded")
+		fn.pf("_raw = _padded")
 		fn.unindent()
-		fn.printf("} else {")
+		fn.pf("} else {")
 		fn.indent()
-		fn.printf("_raw = _raw[:_size]")
+		fn.pf("_raw = _raw[:_size]")
 		fn.unindent()
-		fn.printf("}")
-		fn.printf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
+		fn.pf("}")
+		fn.pf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	} else if a.SizeEos {
 		// User type with size-eos: write to substream
-		fn.printf("{")
+		fn.pf("{")
 		fn.indent()
-		fn.printf("_buf := kaitai.NewSeekableBuffer(nil)")
-		fn.printf("_sub := kaitai.NewWriter(_buf)")
-		fn.printf("if err = %s.%s(_sub); err != nil { return err }", valExpr, writeMethodName)
-		fn.printf("_raw := _buf.Bytes()")
+		fn.pf("_buf := kaitai.NewSeekableBuffer(nil)")
+		fn.pf("_sub := kaitai.NewWriter(_buf)")
+		fn.pf("if err = %s.%s(_sub); err != nil { return err }", valExpr, writeMethodName)
+		fn.pf("_raw := _buf.Bytes()")
 		if a.Process != nil {
-			e.emitProcessReverse(fn, unit, a.Process, "_raw")
+			e.emitUnprocess(fn, unit, a.Process, "_raw")
 		}
-		fn.printf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
+		fn.pf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	} else if a.Terminator != nil {
 		// User type with terminator: write to substream, then write content + terminator
-		fn.printf("{")
+		fn.pf("{")
 		fn.indent()
 		if a.Process != nil {
 			// When process + terminator, use stored raw bytes if available
 			rawExpr := fmt.Sprintf("this._raw_%s", string(a.ID))
-			fn.printf("if %s != nil {", rawExpr)
+			fn.pf("if %s != nil {", rawExpr)
 			fn.indent()
-			fn.printf("if err = wstream.WriteBytes(%s); err != nil { return err }", rawExpr)
+			fn.pf("if err = wstream.WriteBytes(%s); err != nil { return err }", rawExpr)
 			fn.unindent()
-			fn.printf("} else {")
+			fn.pf("} else {")
 			fn.indent()
-			fn.printf("_buf := kaitai.NewSeekableBuffer(nil)")
-			fn.printf("_sub := kaitai.NewWriter(_buf)")
-			fn.printf("if err = %s.%s(_sub); err != nil { return err }", valExpr, writeMethodName)
-			fn.printf("_raw := _buf.Bytes()")
-			e.emitProcessReverse(fn, unit, a.Process, "_raw")
-			fn.printf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
+			fn.pf("_buf := kaitai.NewSeekableBuffer(nil)")
+			fn.pf("_sub := kaitai.NewWriter(_buf)")
+			fn.pf("if err = %s.%s(_sub); err != nil { return err }", valExpr, writeMethodName)
+			fn.pf("_raw := _buf.Bytes()")
+			e.emitUnprocess(fn, unit, a.Process, "_raw")
+			fn.pf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 		} else {
-			fn.printf("_buf := kaitai.NewSeekableBuffer(nil)")
-			fn.printf("_sub := kaitai.NewWriter(_buf)")
-			fn.printf("if err = %s.%s(_sub); err != nil { return err }", valExpr, writeMethodName)
-			fn.printf("if err = wstream.WriteBytes(_buf.Bytes()); err != nil { return err }")
+			fn.pf("_buf := kaitai.NewSeekableBuffer(nil)")
+			fn.pf("_sub := kaitai.NewWriter(_buf)")
+			fn.pf("if err = %s.%s(_sub); err != nil { return err }", valExpr, writeMethodName)
+			fn.pf("if err = wstream.WriteBytes(_buf.Bytes()); err != nil { return err }")
 		}
 		consume := a.Consume == nil || *a.Consume // default true
 		include := a.Include != nil && *a.Include
 		if consume && !include {
-			fn.printf("if err = wstream.WriteU1(%d); err != nil { return err }", *a.Terminator)
+			fn.pf("if err = wstream.WriteU1(%d); err != nil { return err }", *a.Terminator)
 		}
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	} else {
 		// Direct write to stream
-		fn.printf("if err = %s.%s(wstream); err != nil { return err }", valExpr, writeMethodName)
+		fn.pf("if err = %s.%s(wstream); err != nil { return err }", valExpr, writeMethodName)
 	}
 }
 
@@ -676,88 +666,79 @@ func (e *Emitter) positionedInstanceWrite(unit *goUnit, gs *goStruct, inst *engi
 		out:  []goVar{{name: "err", typ: "error"}},
 	}
 
-	oldNeedRoot := e.needRoot
-	oldNeedParent := e.needParent
-	oldInWriteExpr := e.inWriteExpr
-	e.needRoot = false
-	e.needParent = false
-	e.inWriteExpr = true
-	defer func() {
-		e.needRoot = oldNeedRoot
-		e.needParent = oldNeedParent
-		e.inWriteExpr = oldInWriteExpr
-	}()
+	defer e.saveExprMode()()
+	e.mode = exprMode{inWriteExpr: true}
 
 	if a.IO != nil {
 		streamExpr := e.expr(a.IO)
 		if streamExpr != "this.IO_" && streamExpr != "stream" {
-			fn.printf("return nil")
+			fn.pf("return nil")
 			unit.methods = append(unit.methods, fn)
 			return
 		}
 	}
 
 	if a.Pos == nil {
-		fn.printf("return nil")
+		fn.pf("return nil")
 		unit.methods = append(unit.methods, fn)
 		return
 	}
 	if positionedExprDependsOnInputExtent(a.Pos) {
-		fn.printf("return nil")
+		fn.pf("return nil")
 		unit.methods = append(unit.methods, fn)
 		return
 	}
 
-	fn.printf("if !this._f_computed_%s {", string(a.ID))
+	fn.pf("if !this._f_computed_%s {", string(a.ID))
 	fn.indent()
-	fn.printf("return nil")
+	fn.pf("return nil")
 	fn.unindent()
-	fn.printf("}")
+	fn.pf("}")
 
-	fn.printf("_v := this._inst_%s", string(a.ID))
+	fn.pf("_v := this._inst_%s", string(a.ID))
 	writeValExpr := "_v"
 	if a.If != nil {
-		fn.printf("if _v == nil {")
+		fn.pf("if _v == nil {")
 		fn.indent()
-		fn.printf("return nil")
+		fn.pf("return nil")
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 		instType := e.inferInstanceType(inst)
 		if instType != "any" && needsPointerForNil(instType) {
 			e.setImport(unit, "fmt", "fmt")
-			fn.printf("_vTyped, ok := _v.(%s)", instType)
-			fn.printf("if !ok { return fmt.Errorf(\"write positioned instance %s: expected %s, got %%T\", _v) }", string(a.ID), instType)
+			fn.pf("_vTyped, ok := _v.(%s)", instType)
+			fn.pf("if !ok { return fmt.Errorf(\"write positioned instance %s: expected %s, got %%T\", _v) }", string(a.ID), instType)
 			writeValExpr = "_vTyped"
 		}
 	}
 
-	fn.printf("_pos, err := wstream.Pos()")
-	fn.printf("if err != nil { return err }")
-	fn.printf("_, err = wstream.Seek(int64(%s), 0)", e.expr(a.Pos))
-	fn.printf("if err != nil { return err }")
+	fn.pf("_pos, err := wstream.Pos()")
+	fn.pf("if err != nil { return err }")
+	fn.pf("_, err = wstream.Seek(int64(%s), 0)", e.expr(a.Pos))
+	fn.pf("if err != nil { return err }")
 	if e.endian == types.SwitchEndian {
-		fn.printf("if this._isLE {")
+		fn.pf("if this._isLE {")
 		fn.indent()
 		e.writePositionedInstanceValue(unit, &fn, inst, writeValExpr, types.LittleEndian)
 		fn.unindent()
-		fn.printf("} else {")
+		fn.pf("} else {")
 		fn.indent()
 		e.writePositionedInstanceValue(unit, &fn, inst, writeValExpr, types.BigEndian)
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	} else {
 		e.writePositionedInstanceValue(unit, &fn, inst, writeValExpr, types.UnspecifiedOrder)
 	}
-	fn.printf("_, err = wstream.Seek(_pos, 0)")
-	fn.printf("if err != nil { return err }")
-	fn.printf("return nil")
+	fn.pf("_, err = wstream.Seek(_pos, 0)")
+	fn.pf("if err != nil { return err }")
+	fn.pf("return nil")
 
-	fn.preprintf("_ = _root")
-	fn.preprintf("_root := this.Root_")
-	fn.preprintf("_ = _parent")
-	fn.preprintf("_parent := this.Parent_")
-	fn.preprintf("_ = stream")
-	fn.preprintf("stream := wstream")
+	fn.ppf("_ = _root")
+	fn.ppf("_root := this.Root_")
+	fn.ppf("_ = _parent")
+	fn.ppf("_parent := this.Parent_")
+	fn.ppf("_ = stream")
+	fn.ppf("stream := wstream")
 
 	unit.methods = append(unit.methods, fn)
 }
@@ -821,20 +802,20 @@ func (e *Emitter) writePositionedInstanceValue(unit *goUnit, fn *goFunc, inst *e
 		helperName := "write" + e.typeSwitchName(a.ID)
 		needsIndex := exprContainsIndex(ts.SwitchOn)
 		if a.Repeat != nil {
-			fn.printf("for i, _item := range %s {", valExpr)
+			fn.pf("for i, _item := range %s {", valExpr)
 			fn.indent()
-			fn.printf("_ = i")
+			fn.pf("_ = i")
 			if needsIndex {
-				fn.printf("if err = this.%s(wstream, _item, i); err != nil { return err }", helperName)
+				fn.pf("if err = this.%s(wstream, _item, i); err != nil { return err }", helperName)
 			} else {
-				fn.printf("if err = this.%s(wstream, _item); err != nil { return err }", helperName)
+				fn.pf("if err = this.%s(wstream, _item); err != nil { return err }", helperName)
 			}
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 		} else if needsIndex {
-			fn.printf("if err = this.%s(wstream, %s, 0); err != nil { return err }", helperName, valExpr)
+			fn.pf("if err = this.%s(wstream, %s, 0); err != nil { return err }", helperName, valExpr)
 		} else {
-			fn.printf("if err = this.%s(wstream, %s); err != nil { return err }", helperName, valExpr)
+			fn.pf("if err = this.%s(wstream, %s); err != nil { return err }", helperName, valExpr)
 		}
 		return
 	}
@@ -850,19 +831,19 @@ func (e *Emitter) writePositionedInstanceValue(unit *goUnit, fn *goFunc, inst *e
 
 	if rt.TypeRef.Kind == types.String && rt.TypeRef.String != nil && e.needsEncodingConversion(rt.TypeRef.String.Encoding) {
 		encoder := e.encodingEncoder(unit, rt.TypeRef.String.Encoding)
-		fn.printf("{")
+		fn.pf("{")
 		fn.indent()
-		fn.printf("_encBytes, err := %s.Bytes([]byte(%s))", encoder, valExpr)
-		fn.printf("if err != nil { return err }")
+		fn.pf("_encBytes, err := %s.Bytes([]byte(%s))", encoder, valExpr)
+		fn.pf("if err != nil { return err }")
 		if a.Process != nil {
-			fn.printf("_raw := _encBytes")
-			e.emitProcessReverse(fn, unit, a.Process, "_raw")
-			fn.printf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
+			fn.pf("_raw := _encBytes")
+			e.emitUnprocess(fn, unit, a.Process, "_raw")
+			fn.pf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
 		} else {
-			fn.printf("if err = %s; err != nil { return err }", e.writeCallRefOn("wstream", &types.TypeRef{Kind: types.Bytes}, "_encBytes"))
+			fn.pf("if err = %s; err != nil { return err }", e.writeCallRefOn("wstream", &types.TypeRef{Kind: types.Bytes}, "_encBytes"))
 		}
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 		return
 	}
 
@@ -882,10 +863,10 @@ func (e *Emitter) writePositionedInstanceValue(unit *goUnit, fn *goFunc, inst *e
 
 	switch repeat := a.Repeat.(type) {
 	case types.RepeatExpr:
-		fn.printf("for i, _item := range %s {", valExpr)
+		fn.pf("for i, _item := range %s {", valExpr)
 		fn.indent()
-		fn.printf("_ = i")
-		fn.printf("if i >= int(%s) { break }", e.expr(repeat.CountExpr))
+		fn.pf("_ = i")
+		fn.pf("if i >= int(%s) { break }", e.expr(repeat.CountExpr))
 		itemExpr := "_item"
 		if a.Enum != "" {
 			itemExpr = fmt.Sprintf("(%s)(_item)", e.declTypeRef(rt.TypeRef, nil))
@@ -899,22 +880,22 @@ func (e *Emitter) writePositionedInstanceValue(unit *goUnit, fn *goFunc, inst *e
 				itemExpr = "uint64(_item)"
 			}
 		}
-		fn.printf("if err = %s; err != nil { return err }", e.writeCallRefOn("wstream", rt.TypeRef, itemExpr))
+		fn.pf("if err = %s; err != nil { return err }", e.writeCallRefOn("wstream", rt.TypeRef, itemExpr))
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	case types.RepeatEOS:
-		fn.printf("for i, _item := range %s {", valExpr)
+		fn.pf("for i, _item := range %s {", valExpr)
 		fn.indent()
-		fn.printf("_ = i")
+		fn.pf("_ = i")
 		itemExpr := "_item"
 		if a.Enum != "" {
 			itemExpr = fmt.Sprintf("(%s)(_item)", e.declTypeRef(rt.TypeRef, nil))
 		}
-		fn.printf("if err = %s; err != nil { return err }", e.writeCallRefOn("wstream", rt.TypeRef, itemExpr))
+		fn.pf("if err = %s; err != nil { return err }", e.writeCallRefOn("wstream", rt.TypeRef, itemExpr))
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	default:
-		fn.printf("if err = %s; err != nil { return err }", e.writeCallRefOn("wstream", rt.TypeRef, writeVal))
+		fn.pf("if err = %s; err != nil { return err }", e.writeCallRefOn("wstream", rt.TypeRef, writeVal))
 	}
 }
 
@@ -937,53 +918,53 @@ func (e *Emitter) writePositionedUserInstance(unit *goUnit, fn *goFunc, inst *en
 
 	writeOne := func(itemExpr string) {
 		if a.Size != nil || a.SizeEos || a.Process != nil {
-			fn.printf("{")
+			fn.pf("{")
 			fn.indent()
-			fn.printf("_buf := kaitai.NewSeekableBuffer(nil)")
-			fn.printf("_sub := kaitai.NewWriter(_buf)")
-			fn.printf("if err = %s.%s(_sub); err != nil { return err }", itemExpr, writeMethodName)
-			fn.printf("_raw := _buf.Bytes()")
+			fn.pf("_buf := kaitai.NewSeekableBuffer(nil)")
+			fn.pf("_sub := kaitai.NewWriter(_buf)")
+			fn.pf("if err = %s.%s(_sub); err != nil { return err }", itemExpr, writeMethodName)
+			fn.pf("_raw := _buf.Bytes()")
 			if a.Process != nil {
-				e.emitProcessReverse(fn, unit, a.Process, "_raw")
+				e.emitUnprocess(fn, unit, a.Process, "_raw")
 			}
 			if a.Size != nil {
-				fn.printf("_size := int(%s)", e.expr(a.Size))
-				fn.printf("if len(_raw) < _size {")
+				fn.pf("_size := int(%s)", e.expr(a.Size))
+				fn.pf("if len(_raw) < _size {")
 				fn.indent()
-				fn.printf("_padded := make([]byte, _size)")
-				fn.printf("copy(_padded, _raw)")
-				fn.printf("_raw = _padded")
+				fn.pf("_padded := make([]byte, _size)")
+				fn.pf("copy(_padded, _raw)")
+				fn.pf("_raw = _padded")
 				fn.unindent()
-				fn.printf("} else {")
+				fn.pf("} else {")
 				fn.indent()
-				fn.printf("_raw = _raw[:_size]")
+				fn.pf("_raw = _raw[:_size]")
 				fn.unindent()
-				fn.printf("}")
+				fn.pf("}")
 			}
-			fn.printf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
+			fn.pf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 		} else {
-			fn.printf("if err = %s.%s(wstream); err != nil { return err }", itemExpr, writeMethodName)
+			fn.pf("if err = %s.%s(wstream); err != nil { return err }", itemExpr, writeMethodName)
 		}
 	}
 
 	switch repeat := a.Repeat.(type) {
 	case types.RepeatExpr:
-		fn.printf("for i, _item := range %s {", valExpr)
+		fn.pf("for i, _item := range %s {", valExpr)
 		fn.indent()
-		fn.printf("_ = i")
-		fn.printf("if i >= int(%s) { break }", e.expr(repeat.CountExpr))
+		fn.pf("_ = i")
+		fn.pf("if i >= int(%s) { break }", e.expr(repeat.CountExpr))
 		writeOne("_item")
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	case types.RepeatEOS:
-		fn.printf("for i, _item := range %s {", valExpr)
+		fn.pf("for i, _item := range %s {", valExpr)
 		fn.indent()
-		fn.printf("_ = i")
+		fn.pf("_ = i")
 		writeOne("_item")
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	default:
 		if rt.TypeRef != nil && rt.TypeRef.Kind == types.User {
 			writeOne(valExpr)
@@ -991,8 +972,8 @@ func (e *Emitter) writePositionedUserInstance(unit *goUnit, fn *goFunc, inst *en
 	}
 }
 
-// writeTypeSwitchCall generates a call to the type switch write helper.
-func (e *Emitter) writeTypeSwitchCall(fn *goFunc, typ *engine.ExprValue) {
+// emitTypeSwitchWriteCall generates a call to the type switch write helper.
+func (e *Emitter) emitTypeSwitchWriteCall(fn *goFunc, typ *engine.ExprValue) {
 	a := typ.Attr
 	fieldName := "this." + e.fieldName(a.ID)
 	ts := a.Type.TypeSwitch
@@ -1000,27 +981,27 @@ func (e *Emitter) writeTypeSwitchCall(fn *goFunc, typ *engine.ExprValue) {
 	helperName := "write" + e.typeSwitchName(a.ID)
 	needsIndex := exprContainsIndex(ts.SwitchOn)
 	if a.Repeat != nil {
-		fn.printf("for _i, _item := range %s {", fieldName)
+		fn.pf("for _i, _item := range %s {", fieldName)
 		fn.indent()
-		fn.printf("_ = _i")
+		fn.pf("_ = _i")
 		if needsIndex {
-			fn.printf("if err = this.%s(wstream, _item, _i); err != nil { return err }", helperName)
+			fn.pf("if err = this.%s(wstream, _item, _i); err != nil { return err }", helperName)
 		} else {
-			fn.printf("if err = this.%s(wstream, _item); err != nil { return err }", helperName)
+			fn.pf("if err = this.%s(wstream, _item); err != nil { return err }", helperName)
 		}
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	} else {
 		if needsIndex {
-			fn.printf("if err = this.%s(wstream, %s, 0); err != nil { return err }", helperName, fieldName)
+			fn.pf("if err = this.%s(wstream, %s, 0); err != nil { return err }", helperName, fieldName)
 		} else {
-			fn.printf("if err = this.%s(wstream, %s); err != nil { return err }", helperName, fieldName)
+			fn.pf("if err = this.%s(wstream, %s); err != nil { return err }", helperName, fieldName)
 		}
 	}
 }
 
-// typeSwitchWrite generates the type switch write helper method.
-func (e *Emitter) typeSwitchWrite(unit *goUnit, typ *engine.ExprValue, forcedEndian types.EndianKind) {
+// emitTypeSwitchWrite generates the type switch write helper method.
+func (e *Emitter) emitTypeSwitchWrite(unit *goUnit, typ *engine.ExprValue, forcedEndian types.EndianKind) {
 	a := typ.Attr
 	ts := a.Type.TypeSwitch
 
@@ -1041,15 +1022,15 @@ func (e *Emitter) typeSwitchWrite(unit *goUnit, typ *engine.ExprValue, forcedEnd
 	}
 
 	// Add stream/parent/root/index references for expressions that need them
-	fn.printf("stream := this.IO_")
-	fn.printf("_ = stream")
-	fn.printf("_parent := this.Parent_")
-	fn.printf("_ = _parent")
-	fn.printf("_root := this.Root_")
-	fn.printf("_ = _root")
+	fn.pf("stream := this.IO_")
+	fn.pf("_ = stream")
+	fn.pf("_parent := this.Parent_")
+	fn.pf("_ = _parent")
+	fn.pf("_root := this.Root_")
+	fn.pf("_ = _root")
 	if !needsIndex {
-		fn.printf("i := 0")
-		fn.printf("_ = i")
+		fn.pf("i := 0")
+		fn.pf("_ = i")
 	}
 
 	// Determine the write method based on endianness
@@ -1071,7 +1052,7 @@ func (e *Emitter) typeSwitchWrite(unit *goUnit, typ *engine.ExprValue, forcedEnd
 	isEnum := false
 	if switchOnType != nil && switchOnType.Kind == engine.AttrKind {
 		if switchOnType.Attr.Enum != "" {
-			enumTyp := e.resolveType(switchOnType.Attr.Enum)
+			enumTyp := e.mustResolveType(switchOnType.Attr.Enum)
 			typeCast = e.declType(enumTyp)
 			isEnum = true
 		}
@@ -1126,7 +1107,7 @@ func (e *Emitter) typeSwitchWrite(unit *goUnit, typ *engine.ExprValue, forcedEnd
 			}
 		}
 		if hasNonDefaultCases {
-			e.needBytes = true
+			e.file.needBytes = true
 		}
 		first := true
 		for caseKey := range ts.Cases {
@@ -1139,76 +1120,76 @@ func (e *Emitter) typeSwitchWrite(unit *goUnit, typ *engine.ExprValue, forcedEnd
 				caseStr = fmt.Sprintf("[]byte(%s)", caseStr)
 			}
 			if first {
-				fn.printf("if bytes.Equal(%s, %s) {", switchOnExpr, caseStr)
+				fn.pf("if bytes.Equal(%s, %s) {", switchOnExpr, caseStr)
 				first = false
 			} else {
-				fn.printf("} else if bytes.Equal(%s, %s) {", switchOnExpr, caseStr)
+				fn.pf("} else if bytes.Equal(%s, %s) {", switchOnExpr, caseStr)
 			}
 			fn.indent()
-			e.writeTypeSwitchCaseRef(&fn, ts.Cases[caseKey], writeMethodName)
+			e.emitTypeSwitchWriteCaseRef(&fn, ts.Cases[caseKey], writeMethodName)
 			fn.unindent()
 		}
 		if _, ok := ts.Cases["_"]; ok {
 			if !first {
-				fn.printf("} else {")
+				fn.pf("} else {")
 				fn.indent()
-				e.writeTypeSwitchCaseRef(&fn, ts.Cases["_"], writeMethodName)
+				e.emitTypeSwitchWriteCaseRef(&fn, ts.Cases["_"], writeMethodName)
 				fn.unindent()
 			} else {
 				// Only default case - write directly without if/else
-				e.writeTypeSwitchCaseRef(&fn, ts.Cases["_"], writeMethodName)
+				e.emitTypeSwitchWriteCaseRef(&fn, ts.Cases["_"], writeMethodName)
 			}
 		} else if !first {
 			// Fallback: write raw bytes for unmatched cases
-			fn.printf("} else {")
+			fn.pf("} else {")
 			fn.indent()
-			fn.printf("if _raw, ok := val.([]byte); ok {")
+			fn.pf("if _raw, ok := val.([]byte); ok {")
 			fn.indent()
-			fn.printf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
+			fn.pf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 			fn.unindent()
 		}
 		if !first {
-			fn.printf("}")
+			fn.pf("}")
 		}
 	} else {
-		fn.printf("switch %s {", switchOnExpr)
+		fn.pf("switch %s {", switchOnExpr)
 		for caseKey := range ts.Cases {
 			if caseKey == "_" {
 				continue
 			}
 			goValue := e.typeSwitchCaseValue(caseKey)
-			fn.printf("case %s:", goValue)
+			fn.pf("case %s:", goValue)
 			fn.indent()
-			e.writeTypeSwitchCaseRef(&fn, ts.Cases[caseKey], writeMethodName)
+			e.emitTypeSwitchWriteCaseRef(&fn, ts.Cases[caseKey], writeMethodName)
 			fn.unindent()
 		}
 		if _, ok := ts.Cases["_"]; ok {
-			fn.printf("default:")
+			fn.pf("default:")
 			fn.indent()
-			e.writeTypeSwitchCaseRef(&fn, ts.Cases["_"], writeMethodName)
+			e.emitTypeSwitchWriteCaseRef(&fn, ts.Cases["_"], writeMethodName)
 			fn.unindent()
 		} else {
 			// Fallback: write raw bytes for unmatched switch cases
-			fn.printf("default:")
+			fn.pf("default:")
 			fn.indent()
-			fn.printf("if _raw, ok := val.([]byte); ok {")
+			fn.pf("if _raw, ok := val.([]byte); ok {")
 			fn.indent()
-			fn.printf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
+			fn.pf("if err = wstream.WriteBytes(_raw); err != nil { return err }")
 			fn.unindent()
-			fn.printf("}")
+			fn.pf("}")
 			fn.unindent()
 		}
-		fn.printf("}")
+		fn.pf("}")
 	}
 
-	fn.printf("return nil")
+	fn.pf("return nil")
 	unit.methods = append(unit.methods, fn)
 }
 
-// writeTypeSwitchCaseRef generates the write code for a single case in a type switch.
-func (e *Emitter) writeTypeSwitchCaseRef(fn *goFunc, caseTypeRef types.TypeRef, writeMethodName string) {
+// emitTypeSwitchWriteCaseRef generates the write code for a single case in a type switch.
+func (e *Emitter) emitTypeSwitchWriteCaseRef(fn *goFunc, caseTypeRef types.TypeRef, writeMethodName string) {
 	folded := caseTypeRef
 	// Fold endian on the case type ref
 	caseType := types.Type{TypeRef: &caseTypeRef}
@@ -1219,126 +1200,19 @@ func (e *Emitter) writeTypeSwitchCaseRef(fn *goFunc, caseTypeRef types.TypeRef, 
 
 	if folded.Kind == types.User && folded.User != nil {
 		// User type case: type assert and write
-		resolved := e.resolveType(folded.User.Name)
+		resolved := e.mustResolveType(folded.User.Name)
 		typeName := e.declType(resolved)
-		fn.printf("if _v, ok := val.(*%s); ok {", typeName)
+		fn.pf("if _v, ok := val.(*%s); ok {", typeName)
 		fn.indent()
-		fn.printf("if err = _v.%s(wstream); err != nil { return err }", writeMethodName)
+		fn.pf("if err = _v.%s(wstream); err != nil { return err }", writeMethodName)
 		fn.unindent()
-		fn.printf("}")
+		fn.pf("}")
 	} else {
 		// Primitive case: cast and write
 		valExpr := fmt.Sprintf("val.(%s)", e.declTypeRef(&folded, nil))
 		writeCall := e.writeCallRefOn("wstream", &folded, valExpr)
-		fn.printf("if err = %s; err != nil { return err }", writeCall)
+		fn.pf("if err = %s; err != nil { return err }", writeCall)
 	}
-}
-
-// emitProcessReverse applies the inverse of a process transformation.
-func (e *Emitter) emitProcessReverse(fn *goFunc, unit *goUnit, process *expr.Expr, varName string) {
-	if process == nil {
-		return
-	}
-	e.setImport(unit, kaitaiRuntimePackagePath, kaitaiRuntimePackageName)
-	root := process.Root
-	switch n := root.(type) {
-	case expr.CallNode:
-		if mn, ok := n.Object.(expr.MemberNode); ok {
-			switch mn.Property {
-			case "xor":
-				// XOR is self-inverse
-				if len(n.Args) > 0 {
-					argStr := e.exprNode(n.Args[0])
-					if e.isNodeByteArray(n.Args[0]) {
-						fn.printf("%s = kaitai.ProcessXOR(%s, %s)", varName, varName, argStr)
-					} else {
-						fn.printf("%s = kaitai.ProcessXOR(%s, []byte{byte(%s)})", varName, varName, argStr)
-					}
-				}
-				return
-			case "rol":
-				// Inverse of ROL is ROR
-				if len(n.Args) > 0 {
-					fn.printf("%s = kaitai.ProcessRotateRight(%s, int(%s))", varName, varName, e.exprNode(n.Args[0]))
-				}
-				return
-			case "ror":
-				// Inverse of ROR is ROL
-				if len(n.Args) > 0 {
-					fn.printf("%s = kaitai.ProcessRotateLeft(%s, int(%s))", varName, varName, e.exprNode(n.Args[0]))
-				}
-				return
-			case "zlib":
-				fn.printf("%s, err = kaitai.UnprocessZlib(%s)", varName, varName)
-				fn.printf("if err != nil { return err }")
-				return
-			}
-		}
-		if id, ok := n.Object.(expr.IdentNode); ok {
-			switch id.Identifier {
-			case "xor":
-				if len(n.Args) > 0 {
-					argStr := e.exprNode(n.Args[0])
-					if e.isNodeByteArray(n.Args[0]) {
-						fn.printf("%s = kaitai.ProcessXOR(%s, %s)", varName, varName, argStr)
-					} else {
-						fn.printf("%s = kaitai.ProcessXOR(%s, []byte{byte(%s)})", varName, varName, argStr)
-					}
-				}
-				return
-			case "rol":
-				if len(n.Args) > 0 {
-					fn.printf("%s = kaitai.ProcessRotateRight(%s, int(%s))", varName, varName, e.exprNode(n.Args[0]))
-				}
-				return
-			case "ror":
-				if len(n.Args) > 0 {
-					fn.printf("%s = kaitai.ProcessRotateLeft(%s, int(%s))", varName, varName, e.exprNode(n.Args[0]))
-				}
-				return
-			case "zlib":
-				fn.printf("%s, err = kaitai.UnprocessZlib(%s)", varName, varName)
-				fn.printf("if err != nil { return err }")
-				return
-			}
-		}
-	case expr.IdentNode:
-		switch n.Identifier {
-		case "zlib":
-			fn.printf("%s, err = kaitai.UnprocessZlib(%s)", varName, varName)
-			fn.printf("if err != nil { return err }")
-			return
-		default:
-			procType := e.typeName(kaitai.Identifier(n.Identifier))
-			fn.printf("%s = New%s().Encode(%s)", varName, procType, varName)
-			return
-		}
-	}
-	// Custom process with args: mirror `New<T>(args).Decode(x)` with `.Encode(x)`.
-	if call, ok := root.(expr.CallNode); ok {
-		var procName string
-		switch obj := call.Object.(type) {
-		case expr.IdentNode:
-			procName = e.typeName(kaitai.Identifier(obj.Identifier))
-		case expr.MemberNode:
-			// nested.deeply.custom_fx -> use just the last part for the type name
-			procName = e.typeName(kaitai.Identifier(obj.Property))
-		}
-		if procName != "" {
-			args := make([]string, len(call.Args))
-			for i, arg := range call.Args {
-				argStr := e.exprNode(arg)
-				switch arg.(type) {
-				case expr.IdentNode, expr.MemberNode:
-					argStr = "int(" + argStr + ")"
-				}
-				args[i] = argStr
-			}
-			fn.printf("%s = New%s(%s).Encode(%s)", varName, procName, strings.Join(args, ", "), varName)
-			return
-		}
-	}
-	panic(fmt.Errorf("unsupported process expression: %s", process))
 }
 
 // currentStruct returns the full Go struct name for the parent of an attribute.

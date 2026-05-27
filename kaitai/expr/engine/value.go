@@ -242,16 +242,7 @@ func ResultTypeOfNode(context *Context, node expr.Node) *ExprValue {
 		// Handle :: scope separator (e.g., "opcode::strval")
 		typeName := node.TypeName
 		if strings.Contains(typeName, "::") {
-			parts := strings.Split(typeName, "::")
-			var resolved *ExprValue
-			for i, part := range parts {
-				if i == 0 {
-					resolved, _ = context.ResolveType(part)
-				} else if resolved != nil {
-					resolved = resolved.TypeChild(part)
-				}
-			}
-			if resolved != nil {
+			if resolved := context.ResolveQualifiedType(typeName); resolved != nil {
 				return NewValueOf(context, resolved)
 			}
 		} else {

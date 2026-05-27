@@ -76,13 +76,14 @@ func nodeToJSON(n *eval.Node) *treeJSON {
 }
 
 func main() {
+	importPaths := resolve.RegisterImportPathsFlag(flag.CommandLine)
 	flag.Parse()
 	if flag.NArg() != 2 {
 		log.Fatalln("Wrong number of arguments; pass your root .ksy path and a binary file to read.")
 	}
 	rootname := flag.Arg(0)
 	filename := flag.Arg(1)
-	resolver := resolve.NewOSResolver()
+	resolver := resolve.NewOSResolverWithPaths(*importPaths)
 	basename, struc, err := resolver.Resolve("", rootname)
 	if err != nil {
 		log.Fatalf("error resolving root struct: %v", err)

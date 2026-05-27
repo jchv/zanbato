@@ -688,18 +688,11 @@ func (t *Tree) userTypeSpanIsKnown(n *Node, ref *types.TypeRef, schema *kaitai.S
 	// Static-size: if every field in the schema has a fixed layout, the
 	// total size is known. The parent stream has NOT been pre-advanced in
 	// this case, so we seek past the static extent ourselves.
-	if staticSize := engine.ComputeStructSize(schema); staticSize >= 0 {
-		// n.stream is the (sub-)stream the children read from; for the
-		// static-size case there is no sub-stream, so it's the parent
-		// stream. n.startPos was reset to 0 for sub-stream cases - but
-		// those are handled by the earlier returns above, so we're safe
-		// to advance by staticSize from the original parent position.
+	if staticSize := engine.ComputeStructSizeStatic(schema); staticSize >= 0 {
 		curPos, err := n.stream.Pos()
 		if err != nil {
 			return false
 		}
-		// Advance the parent stream so positional siblings read from the
-		// correct offset.
 		if _, err := n.stream.Seek(curPos+staticSize, 0); err != nil {
 			return false
 		}

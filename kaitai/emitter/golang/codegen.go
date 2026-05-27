@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const indentStr = "\t"
+
 type goVar struct {
 	name string
 	typ  string
@@ -84,27 +86,21 @@ type goFunc struct {
 	pfx    string
 }
 
+func (g *goFunc) indent() *goFunc { g.pfx += indentStr; return g }
+
+func (g *goFunc) unindent() *goFunc { g.pfx = g.pfx[:len(g.pfx)-len(indentStr)]; return g }
+
 func (g *goFunc) emit(buf io.Writer) {
 	_, _ = fmt.Fprintf(buf, "func (%s) %s(%s) (%s) {\n%s}\n\n", g.recv.String(), g.name, g.in.String(), g.out.String(), g.source)
 }
 
-func (g *goFunc) preprintf(format string, args ...any) *goFunc {
+func (g *goFunc) ppf(format string, args ...any) *goFunc {
 	g.source = "\t" + g.pfx + fmt.Sprintf(format, args...) + "\n" + g.source
 	return g
 }
 
-func (g *goFunc) printf(format string, args ...any) *goFunc {
+func (g *goFunc) pf(format string, args ...any) *goFunc {
 	g.source += "\t" + g.pfx + fmt.Sprintf(format, args...) + "\n"
-	return g
-}
-
-func (g *goFunc) indent() *goFunc {
-	g.pfx += "\t"
-	return g
-}
-
-func (g *goFunc) unindent() *goFunc {
-	g.pfx = g.pfx[:len(g.pfx)-1]
 	return g
 }
 

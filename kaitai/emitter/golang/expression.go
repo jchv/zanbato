@@ -541,7 +541,7 @@ func (e *Emitter) exprMethod(t expr.MemberNode, v *engine.ExprValue) string {
 	method := v.Method
 	switch method.Method {
 	case engine.MethodIntToString:
-		e.needFmt = true
+		e.file.needFmt = true
 		return fmt.Sprintf("fmt.Sprintf(\"%%d\", %s)", operand)
 	case engine.MethodFloatToInt:
 		return fmt.Sprintf("int(%s)", operand)
@@ -572,8 +572,8 @@ func (e *Emitter) exprMethod(t expr.MemberNode, v *engine.ExprValue) string {
 		return fmt.Sprintf("string(%s)", operand)
 	case engine.MethodStringToInt:
 		// .to_i without args on string - parse as decimal
-		e.needStrconv = true
-		e.needStrings = true
+		e.file.needStrconv = true
+		e.file.needStrings = true
 		return fmt.Sprintf("(func() int { v, err := strconv.ParseInt(strings.TrimSpace(%s), 10, 0); if err != nil { panic(err) }; return int(v) }())", operand)
 	case engine.MethodStringSubstring:
 		// .substring without args doesn't make sense, return identity
@@ -755,31 +755,31 @@ func (e *Emitter) exprBinaryNode(t expr.BinaryNode) string {
 		return e.wrapCalcIntResult(t, fmt.Sprintf("(func() int { a, b := int(%s(%s)), int(%s(%s)); return a - b*(func() int { d := a / b; if (a%%b != 0) && ((a^b) < 0) { d-- }; return d }()) }())", cast, aExpr, cast, bExpr))
 	case expr.OpLessThan:
 		if e.isByteArrayComparison(t.A, t.B) {
-			e.needBytes = true
+			e.file.needBytes = true
 			return fmt.Sprintf("bytes.Compare(%s, %s) < 0", aExpr, bExpr)
 		}
 		return fmt.Sprintf("%s(%s) < %s(%s)", cast, aExpr, cast, bExpr)
 	case expr.OpLessThanEqual:
 		if e.isByteArrayComparison(t.A, t.B) {
-			e.needBytes = true
+			e.file.needBytes = true
 			return fmt.Sprintf("bytes.Compare(%s, %s) <= 0", aExpr, bExpr)
 		}
 		return fmt.Sprintf("%s(%s) <= %s(%s)", cast, aExpr, cast, bExpr)
 	case expr.OpGreaterThan:
 		if e.isByteArrayComparison(t.A, t.B) {
-			e.needBytes = true
+			e.file.needBytes = true
 			return fmt.Sprintf("bytes.Compare(%s, %s) > 0", aExpr, bExpr)
 		}
 		return fmt.Sprintf("%s(%s) > %s(%s)", cast, aExpr, cast, bExpr)
 	case expr.OpGreaterThanEqual:
 		if e.isByteArrayComparison(t.A, t.B) {
-			e.needBytes = true
+			e.file.needBytes = true
 			return fmt.Sprintf("bytes.Compare(%s, %s) >= 0", aExpr, bExpr)
 		}
 		return fmt.Sprintf("%s(%s) >= %s(%s)", cast, aExpr, cast, bExpr)
 	case expr.OpEqual:
 		if e.isByteArrayComparison(t.A, t.B) {
-			e.needBytes = true
+			e.file.needBytes = true
 			return fmt.Sprintf("bytes.Equal(%s, %s)", aExpr, bExpr)
 		}
 		// When comparing values of potentially different types (e.g., int vs enum),
@@ -791,7 +791,7 @@ func (e *Emitter) exprBinaryNode(t expr.BinaryNode) string {
 		return fmt.Sprintf("%s(%s) == %s(%s)", cast, aExpr, cast, bExpr)
 	case expr.OpNotEqual:
 		if e.isByteArrayComparison(t.A, t.B) {
-			e.needBytes = true
+			e.file.needBytes = true
 			return fmt.Sprintf("!bytes.Equal(%s, %s)", aExpr, bExpr)
 		}
 		if cast == "" && e.hasEnumScopeOperand(t.A, t.B) {
@@ -835,7 +835,7 @@ func (e *Emitter) exprNode(node expr.Node) string {
 		if t.Identifier == "_sizeof" {
 			ks := e.context.Struct()
 			if ks != nil {
-				sz := e.computeStructSize(ks)
+				sz := e.context.ComputeStructSize(ks)
 				if sz >= 0 {
 					return fmt.Sprintf("%d", sz)
 				}
@@ -847,10 +847,10 @@ func (e *Emitter) exprNode(node expr.Node) string {
 		case nil:
 			panic(fmt.Errorf("unable to use nested ident subexpression %s as value", t))
 		case e.context.RootValue():
-			e.needRoot = true
+			e.mode.needRoot = true
 			return "_root"
 		case e.context.ParentValue():
-			e.needParent = true
+			e.mode.needParent = true
 			return "_parent"
 		case e.context.StreamValue():
 			return "stream"
@@ -887,7 +887,7 @@ func (e *Emitter) exprNode(node expr.Node) string {
 			// positioned instance before sequential fields are written).
 			retType := e.inferInstanceType(v)
 			writeSuffix := ""
-			if e.inWriteExpr && v.Instance.Value == nil && (v.Instance.Pos != nil || v.Instance.IO != nil) {
+			if e.mode.inWriteExpr && v.Instance.Value == nil && (v.Instance.Pos != nil || v.Instance.IO != nil) {
 				writeSuffix = fmt.Sprintf("; if err := this.write%s(wstream); err != nil { panic(err) }", e.typeName(v.Instance.ID))
 			}
 			// If the instance is conditional, the getter returns 'any'.
@@ -913,7 +913,11 @@ func (e *Emitter) exprNode(node expr.Node) string {
 		switch v.Kind {
 		case engine.IntegerKind:
 			if v.Parent != nil && v.Parent.Kind == engine.EnumValueKind {
-				return e.enumValueName(e.parentStruct(v), e.parentEnum(v), v.Parent.EnumValue.ID)
+				enumVal := v.NearestEnum()
+				if enumVal == nil || enumVal.Enum == nil {
+					panic(fmt.Errorf("enum value without enum ancestor: %s", t))
+				}
+				return e.enumValueName(v.NearestStruct(), enumVal.Enum, v.Parent.EnumValue.ID)
 			} else {
 				panic(fmt.Errorf("unexpected constant in scope subexpression %s", t))
 			}
@@ -944,11 +948,11 @@ func (e *Emitter) exprNode(node expr.Node) string {
 				switch operandResult.Kind {
 				case engine.AttrKind:
 					if operandResult.Attr != nil {
-						sz := computeAttrSize(operandResult.Attr)
+						sz := engine.ComputeAttrSize(operandResult.Attr)
 						if sz < 0 && operandResult.Attr.Type.TypeRef != nil && operandResult.Attr.Type.TypeRef.Kind == types.User {
-							resolved := e.resolveType(operandResult.Attr.Type.TypeRef.User.Name)
+							resolved := e.mustResolveType(operandResult.Attr.Type.TypeRef.User.Name)
 							if resolved.Kind == engine.StructKind && resolved.Struct != nil {
-								sz = e.computeStructSize(resolved.Struct.Type)
+								sz = e.context.ComputeStructSize(resolved.Struct.Type)
 							}
 						}
 						if sz >= 0 {
@@ -957,7 +961,7 @@ func (e *Emitter) exprNode(node expr.Node) string {
 					}
 				case engine.StructKind:
 					if operandResult.Struct != nil {
-						sz := e.computeStructSize(operandResult.Struct.Type)
+						sz := e.context.ComputeStructSize(operandResult.Struct.Type)
 						if sz >= 0 {
 							return fmt.Sprintf("%d", sz)
 						}
@@ -988,7 +992,7 @@ func (e *Emitter) exprNode(node expr.Node) string {
 			retType := e.inferInstanceType(v)
 			operand := e.exprNode(t.Operand)
 			writeSuffix := ""
-			if e.inWriteExpr && v.Instance.Value == nil && (v.Instance.Pos != nil || v.Instance.IO != nil) {
+			if e.mode.inWriteExpr && v.Instance.Value == nil && (v.Instance.Pos != nil || v.Instance.IO != nil) {
 				writeSuffix = fmt.Sprintf("; if err := %s.write%s(wstream); err != nil { panic(err) }", operand, e.typeName(v.Instance.ID))
 			}
 			if v.Instance.If != nil && needsPointerForNil(retType) {
@@ -1094,8 +1098,8 @@ func (e *Emitter) exprNode(node expr.Node) string {
 							panic(fmt.Errorf(".to_s encoding argument must be a string literal, got %s", t.Args[0]))
 						}
 						if e.needsEncodingConversion(enc) {
-							decoder := e.encodingDecoder(e.currentUnit, enc)
-							e.setImport(e.currentUnit, kaitaiRuntimePackagePath, kaitaiRuntimePackageName)
+							decoder := e.encodingDecoder(e.file.unit, enc)
+							e.setImport(e.file.unit, kaitaiRuntimePackagePath, kaitaiRuntimePackageName)
 							return fmt.Sprintf("(func() string { s, err := kaitai.BytesToStr(%s, %s); if err != nil { panic(err) }; return s }())", operand, decoder)
 						}
 						return fmt.Sprintf("string(%s)", operand)
@@ -1106,16 +1110,16 @@ func (e *Emitter) exprNode(node expr.Node) string {
 						return fmt.Sprintf("string([]rune(%s)[%s:%s])", operand, e.exprNode(t.Args[0]), e.exprNode(t.Args[1]))
 					}
 				case engine.MethodStringToInt:
-					e.needStrconv = true
-					e.needStrings = true
+					e.file.needStrconv = true
+					e.file.needStrings = true
 					if len(t.Args) > 0 {
 						return fmt.Sprintf("(func() int { v, err := strconv.ParseInt(strings.TrimSpace(%s), %s, 0); if err != nil { panic(err) }; return int(v) }())", operand, e.exprNode(t.Args[0]))
 					}
 					return fmt.Sprintf("(func() int { v, err := strconv.ParseInt(strings.TrimSpace(%s), 10, 0); if err != nil { panic(err) }; return int(v) }())", operand)
 				case engine.MethodIntToString:
-					e.needFmt = true
+					e.file.needFmt = true
 					if len(t.Args) > 0 {
-						e.needStrconv = true
+						e.file.needStrconv = true
 						return fmt.Sprintf("strconv.FormatInt(int64(%s), %s)", operand, e.exprNode(t.Args[0]))
 					}
 					return fmt.Sprintf("fmt.Sprintf(\"%%d\", %s)", operand)
@@ -1211,8 +1215,8 @@ func (e *Emitter) exprNode(node expr.Node) string {
 		if bits, ok := engine.PrimitiveBitSize(t.TypeName); ok {
 			return fmt.Sprintf("%d", (bits+7)/8)
 		}
-		if resolved := e.resolveQualifiedType(t.TypeName); resolved != nil {
-			if bits := e.computeStructBitSize(resolved.Struct.Type); bits >= 0 {
+		if resolved := e.context.ResolveQualifiedType(t.TypeName); resolved != nil {
+			if bits := e.context.ComputeStructBitSize(resolved.Struct.Type); bits >= 0 {
 				return fmt.Sprintf("%d", (bits+7)/8)
 			}
 		}
@@ -1222,8 +1226,8 @@ func (e *Emitter) exprNode(node expr.Node) string {
 		if bits, ok := engine.PrimitiveBitSize(t.TypeName); ok {
 			return fmt.Sprintf("%d", bits)
 		}
-		if resolved := e.resolveQualifiedType(t.TypeName); resolved != nil {
-			if bits := e.computeStructBitSize(resolved.Struct.Type); bits >= 0 {
+		if resolved := e.context.ResolveQualifiedType(t.TypeName); resolved != nil {
+			if bits := e.context.ComputeStructBitSize(resolved.Struct.Type); bits >= 0 {
 				return fmt.Sprintf("%d", bits)
 			}
 		}
@@ -1233,7 +1237,7 @@ func (e *Emitter) exprNode(node expr.Node) string {
 		if len(t.Parts) == 0 {
 			return `""`
 		}
-		e.needFmt = true
+		e.file.needFmt = true
 		// Build fmt.Sprintf format string and args
 		fmtStr := strings.Builder{}
 		var args []string
@@ -1311,7 +1315,7 @@ func (e *Emitter) isOperandAnyTyped(operand expr.Node) bool {
 				return true
 			}
 			// _root is typed when rootTypeName is set
-			return e.rootTypeName == ""
+			return e.file.rootTypeName == ""
 		}
 	}
 

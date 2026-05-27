@@ -2,8 +2,6 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
-github.com/jchw-forks/kaitai_struct_go_runtime v0.0.0-20260517204442-6ad332f7ef0a h1:x+x5q3GGsE6CmtRP/QwiI3JyXP8OQqp9GK+1yAFbVLg=
-github.com/jchw-forks/kaitai_struct_go_runtime v0.0.0-20260517204442-6ad332f7ef0a/go.mod h1:QsLhr9bn+sijZNuKhkFLbm6GllD4zQ09CXVeppEkp1w=
 github.com/jchw-forks/kaitai_struct_go_runtime v0.0.0-20260517224813-0f63727a30a6 h1:ub1N0GeCA8Non62ol1h9etIf7wYcLZ+gbK7BhmiDB2w=
 github.com/jchw-forks/kaitai_struct_go_runtime v0.0.0-20260517224813-0f63727a30a6/go.mod h1:QsLhr9bn+sijZNuKhkFLbm6GllD4zQ09CXVeppEkp1w=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

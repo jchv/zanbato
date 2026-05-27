@@ -7,14 +7,13 @@ import (
 	"path/filepath"
 
 	"github.com/jchv/zanbato/kaitai"
-	"github.com/jchv/zanbato/kaitai/emitter/golang"
+	"github.com/jchv/zanbato/kaitai/emitter/c"
 	"github.com/jchv/zanbato/kaitai/resolve"
 )
 
 func main() {
 	var compat kaitai.Compatibility
 
-	pkg := flag.String("pkg", "", "Go package path to use")
 	out := flag.String("out", "", "Output directory")
 	debug := flag.Bool("debug", false, "Enable debug features in generated code")
 	flag.Var(&compat, "compat", "Compatibility mode: native (default) or 0.11")
@@ -25,7 +24,7 @@ func main() {
 	}
 	rootname := flag.Arg(0)
 	resolver := resolve.NewOSResolverWithPaths(*importPaths)
-	emitter := golang.NewEmitter(*pkg, resolver)
+	emitter := c.NewEmitter(resolver)
 	emitter.SetDebug(*debug)
 	emitter.SetCompat(compat)
 	basename, struc, err := resolver.Resolve("", rootname)

@@ -68,7 +68,7 @@ func (r nodeRef) LookupChild(name string) (*engine.ExprValue, bool) {
 		}
 		// Fall back to static computation if children couldn't be resolved.
 		if n.schema != nil {
-			if size := engine.ComputeStructSize(n.schema); size >= 0 {
+			if size := engine.ComputeStructSizeStatic(n.schema); size >= 0 {
 				return engine.NewIntegerLiteralValue(big.NewInt(size)), true
 			}
 		}

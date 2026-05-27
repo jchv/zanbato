@@ -1,7 +1,9 @@
 package engine
 
 import (
+	"maps"
 	"math/big"
+	"strings"
 
 	"github.com/jchv/zanbato/kaitai"
 	"github.com/jchv/zanbato/kaitai/types"
@@ -368,13 +370,23 @@ func NewValueOf(context *Context, sym *ExprValue) *ExprValue {
 			}
 		}
 		if sym.Attr.Type.TypeRef == nil {
-			if sym.Attr.Type.TypeSwitch != nil {
-				// Switch type - return a generic value that can be cast via .as<>
+			if sw := sym.Attr.Type.TypeSwitch; sw != nil {
+				// Uniform switch: every case (and default) maps to the
+				// same type, so member access can resolve through it
+				// without an explicit .as<>.
+				if ref := uniformSwitchTypeRef(sw); ref != nil {
+					return NewValueOfTypeInScope(context, *ref, sym.Parent)
+				}
+				// Heterogeneous switch - return a generic value that
+				// can be cast via .as<>.
 				return &ExprValue{Kind: StructKind}
 			}
 			return nil
 		}
-		return NewValueOfType(context, *sym.Attr.Type.TypeRef)
+		// Pass the operand struct's scope so a User type defined inside a
+		// nested types: block (e.g. doc.main_obj) is resolvable even when
+		// the current context root has no such global entry.
+		return NewValueOfTypeInScope(context, *sym.Attr.Type.TypeRef, sym.Parent)
 	case InstanceKind:
 		// For repeated instances, return an array value with array methods
 		if sym.Instance.Repeat != nil {
@@ -394,7 +406,14 @@ func NewValueOf(context *Context, sym *ExprValue) *ExprValue {
 		if sym.Instance.Value != nil {
 			isDefaultBytes := sym.Instance.Type.TypeRef != nil && sym.Instance.Type.TypeRef.Kind == types.Bytes
 			if sym.Instance.Type.TypeRef == nil || isDefaultBytes {
-				result := ResultTypeOfExpr(context, sym.Instance.Value)
+				// Evaluate the value expression in the containing struct's
+				// scope so identifiers like sibling-attr names resolve
+				// correctly, regardless of where the lookup originated.
+				evalCtx := context
+				if sym.Parent != nil {
+					evalCtx = context.WithLocalRoot(sym.Parent)
+				}
+				result := ResultTypeOfExpr(evalCtx, sym.Instance.Value)
 				if result != nil {
 					inferred := NewValueOf(context, result)
 					if inferred != nil {
@@ -404,9 +423,17 @@ func NewValueOf(context *Context, sym *ExprValue) *ExprValue {
 			}
 		}
 		if sym.Instance.Type.TypeRef == nil {
+			// Switch-typed instance: if every case (and default) maps to
+			// the same TypeRef, treat the whole instance as that type so
+			// downstream member accesses can resolve.
+			if sw := sym.Instance.Type.TypeSwitch; sw != nil {
+				if ref := uniformSwitchTypeRef(sw); ref != nil {
+					return NewValueOfTypeInScope(context, *ref, sym.Parent)
+				}
+			}
 			return nil
 		}
-		return NewValueOfType(context, *sym.Instance.Type.TypeRef)
+		return NewValueOfTypeInScope(context, *sym.Instance.Type.TypeRef, sym.Parent)
 	case AliasKind:
 		// For aliases (like _ in repeat-until), resolve to the element type, not the array
 		aliasRef := sym.Alias.Ref
@@ -439,6 +466,53 @@ func NewValueOf(context *Context, sym *ExprValue) *ExprValue {
 }
 
 func NewValueOfType(context *Context, typ types.TypeRef) *ExprValue {
+	return NewValueOfTypeInScope(context, typ, nil)
+}
+
+// uniformSwitchTypeRef returns the single TypeRef that every case (and the
+// default, if any) of `sw` shares, or nil if cases disagree. Lets the engine
+// treat a uniform switch field as if it were typed directly, so member
+// chains like `tag_content.content` resolve without an explicit `.as<>`.
+func uniformSwitchTypeRef(sw *types.TypeSwitch) *types.TypeRef {
+	if sw == nil {
+		return nil
+	}
+	var first *types.TypeRef
+	sameRef := func(a, b *types.TypeRef) bool {
+		if a == nil || b == nil {
+			return false
+		}
+		if a.Kind != b.Kind {
+			return false
+		}
+		if a.Kind == types.User {
+			if a.User == nil || b.User == nil {
+				return false
+			}
+			return a.User.Name == b.User.Name
+		}
+		return true
+	}
+	for _, c := range sw.Cases {
+		cc := c
+		if first == nil {
+			first = &cc
+			continue
+		}
+		if !sameRef(first, &cc) {
+			return nil
+		}
+	}
+	return first
+}
+
+// NewValueOfTypeInScope is like NewValueOfType but also searches `scope` (and
+// its DefParent chain) for nested User types. Callers that traverse a member
+// chain pass the operand's struct value so a name like "main_obj" can be
+// found when it's defined inside a parent struct (e.g. doc -> main_obj),
+// even when context.ResolveType only knows about types reachable from the
+// current local/module/global roots.
+func NewValueOfTypeInScope(context *Context, typ types.TypeRef, scope *ExprValue) *ExprValue {
 	switch typ.Kind {
 	case types.U1, types.U2, types.U2le, types.U2be, types.U4,
 		types.U4le, types.U4be, types.U8, types.U8le, types.U8be,
@@ -447,11 +521,10 @@ func NewValueOfType(context *Context, typ types.TypeRef) *ExprValue {
 		types.UntypedInt:
 		return NewIntegerLiteralValue(big.NewInt(0))
 	case types.Bits:
-		if typ.Bits.Width == 1 {
+		if typ.Bits != nil && typ.Bits.Width == 1 {
 			return NewBooleanLiteralValue(false)
-		} else {
-			return NewIntegerLiteralValue(big.NewInt(0))
 		}
+		return NewIntegerLiteralValue(big.NewInt(0))
 	case types.F4, types.F4le, types.F4be,
 		types.F8, types.F8le, types.F8be,
 		types.UntypedFloat:
@@ -468,7 +541,27 @@ func NewValueOfType(context *Context, typ types.TypeRef) *ExprValue {
 		case "bool":
 			return NewBooleanLiteralValue(false)
 		}
-		resolved, _ := context.ResolveType(typ.User.Name)
+		name := typ.User.Name
+		// Qualified names like "nested_types3::subtype_a::subtype_cc"
+		// resolve through the sibling-aware walk in
+		// ResolveQualifiedTypeInScope - passing the operand's scope so
+		// the first segment can be found via a DefParent ancestor (e.g.
+		// `subtype_a` inside `nested_types3` when the current operand
+		// is `subtype_b`).
+		if strings.Contains(name, "::") {
+			if resolved := context.ResolveQualifiedTypeInScope(name, scope); resolved != nil {
+				return NewValueOf(context, resolved)
+			}
+			return nil
+		}
+		// Walk the scope's DefParent chain for a matching nested type
+		// before falling back to the broader context-level lookup.
+		for s := scope; s != nil; s = s.DefParent {
+			if t := s.TypeChild(name); t != nil {
+				return NewValueOf(context, t)
+			}
+		}
+		resolved, _ := context.ResolveType(name)
 		if resolved == nil {
 			return nil
 		}
@@ -627,12 +720,8 @@ func NewEnumValueSymbol(enumValue *kaitai.EnumValue) *ExprValue {
 	}
 	// Enum value constants need both integer methods (to_s) and enum methods (to_i)
 	enumConstSymbols := map[string]*ExprValue{}
-	for k, v := range IntegerSymbolTable {
-		enumConstSymbols[k] = v
-	}
-	for k, v := range EnumValueSymbolTable {
-		enumConstSymbols[k] = v
-	}
+	maps.Copy(enumConstSymbols, IntegerSymbolTable)
+	maps.Copy(enumConstSymbols, EnumValueSymbolTable)
 	sym.Constant = &ExprValue{
 		Kind:     IntegerKind,
 		Parent:   sym,
@@ -842,6 +931,66 @@ func (s *ExprValue) TypeChild(symbol string) *ExprValue {
 		return nil
 	}
 	return s.Types[symbol]
+}
+
+// NearestStruct walks the Parent chain (starting from s itself) and returns
+// the first value whose Kind is StructKind. Returns nil if none is found.
+func (s *ExprValue) NearestStruct() *ExprValue {
+	for v := s; v != nil; v = v.Parent {
+		if v.Kind == StructKind {
+			return v
+		}
+	}
+	return nil
+}
+
+// NearestEnum walks the Parent chain (starting from s itself) and returns
+// the first value whose Kind is EnumKind. Returns nil if none is found.
+func (s *ExprValue) NearestEnum() *ExprValue {
+	for v := s; v != nil; v = v.Parent {
+		if v.Kind == EnumKind {
+			return v
+		}
+	}
+	return nil
+}
+
+// IsArrayResult reports whether s represents an array-shaped value: either
+// an array literal, a repeated attr/instance, or an array-typed param. It is
+// nil-safe.
+func (s *ExprValue) IsArrayResult() bool {
+	if s == nil {
+		return false
+	}
+	switch s.Kind {
+	case ArrayKind:
+		return true
+	case AttrKind:
+		if s.Attr != nil && (s.Attr.Repeat != nil || (s.Attr.Type.TypeRef != nil && s.Attr.Type.TypeRef.IsArray)) {
+			return true
+		}
+	case InstanceKind:
+		if s.Instance != nil && (s.Instance.Repeat != nil || (s.Instance.Type.TypeRef != nil && s.Instance.Type.TypeRef.IsArray)) {
+			return true
+		}
+	case ParamKind:
+		if s.Param != nil && s.Param.Type.IsArray {
+			return true
+		}
+	}
+	return false
+}
+
+// TypeKind returns the primitive types.Kind of s's value type, or 0 if s has
+// no concrete TypeRef (e.g. it's a method, struct, or nil). It is nil-safe.
+func (s *ExprValue) TypeKind() types.Kind {
+	if s == nil {
+		return 0
+	}
+	if vt, ok := s.ValueType(); ok && vt.Type.TypeRef != nil {
+		return vt.Type.TypeRef.Kind
+	}
+	return 0
 }
 
 // ResolutionScope represents a specific scope of resolution. Values are in
@@ -1077,6 +1226,68 @@ func (context *Context) Resolve(name string) (*ExprValue, ResolutionScope) {
 	}
 
 	return nil, GlobalScope
+}
+
+// ResolveQualifiedType is shorthand for ResolveQualifiedTypeInScope(name, nil).
+func (context *Context) ResolveQualifiedType(name string) *ExprValue {
+	return context.ResolveQualifiedTypeInScope(name, nil)
+}
+
+// ResolveQualifiedTypeInScope resolves a `::`-scoped type name like
+// `root::chunk::chunk_body::chunk_meta`. The first segment is looked up
+// first inside `scope` (and its DefParent chain) so a type defined in a
+// sibling of the current operand resolves even when the test-time engine
+// context is rooted somewhere else. After that, each subsequent part is
+// looked up as a child of the previous step; if a step misses, we retry
+// against any known root or ancestor that owns the next part.
+func (context *Context) ResolveQualifiedTypeInScope(name string, scope *ExprValue) *ExprValue {
+	if !strings.Contains(name, "::") {
+		for s := scope; s != nil; s = s.DefParent {
+			if t := s.TypeChild(name); t != nil {
+				return t
+			}
+		}
+		t, _ := context.ResolveType(name)
+		return t
+	}
+	parts := strings.Split(name, "::")
+	var resolved *ExprValue
+	for i, part := range parts {
+		if i == 0 {
+			for s := scope; s != nil && resolved == nil; s = s.DefParent {
+				resolved = s.TypeChild(part)
+			}
+			if resolved == nil {
+				resolved, _ = context.ResolveType(part)
+			}
+			if resolved == nil {
+				return nil
+			}
+			continue
+		}
+		if next := resolved.TypeChild(part); next != nil {
+			resolved = next
+			continue
+		}
+		// Fall back to a sibling at any known root.
+		var fallback *ExprValue
+		if t := context.module.TypeChild(part); t != nil {
+			fallback = t
+		} else if t := context.global.TypeChild(part); t != nil {
+			fallback = t
+		} else {
+			for a := resolved.DefParent; a != nil && fallback == nil; a = a.DefParent {
+				if t := a.TypeChild(part); t != nil {
+					fallback = t
+				}
+			}
+		}
+		if fallback == nil {
+			return nil
+		}
+		resolved = fallback
+	}
+	return resolved
 }
 
 func (context *Context) ResolveType(name string) (*ExprValue, ResolutionScope) {

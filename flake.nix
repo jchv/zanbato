@@ -107,6 +107,7 @@
             pkgs.go
             pkgs.gopls
             pkgs.tinygo
+            pkgs.zlib
           ];
         };
         devShells.validate = pkgs.mkShell {
